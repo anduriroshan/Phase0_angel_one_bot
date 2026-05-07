@@ -1,0 +1,22 @@
+[package]
+name = "ingestion"
+version = "0.1.0"
+edition = "2021"
+description = "WebSocket ingestion node: authenticates with Angel One SmartAPI and streams market data"
+
+[dependencies]
+common = { path = "../common" }
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dotenvy = "0.15"
+chrono = "0.4"
+totp-rs = { version = "5.6", features = ["gen_secret"] }
+zeromq = { version = "0.4", features = ["tokio-runtime"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+futures-util = "0.3"
+http = "1"
+url = "2"

@@ -1,0 +1,14 @@
+[package]
+name = "storage"
+version = "0.1.0"
+edition = "2021"
+description = "Hot (QuestDB) and cold (Parquet) storage sinks for tick data"
+
+[dependencies]
+common = { path = "../common" }
+tokio = { version = "1", features = ["full"] }
+questdb-rs = "4"
+arrow = { version = "54", features = ["prettyprint"] }
+parquet = { version = "54", features = ["zstd"] }
+chrono = "0.4"
+tracing = "0.1"
