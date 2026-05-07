@@ -1,0 +1,17 @@
+services:
+  questdb:
+    image: questdb/questdb:latest
+    container_name: phase0_questdb
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # HTTP API + Web Console + ILP/HTTP
+      - "9009:9009"   # ILP over TCP (legacy)
+      - "8812:8812"   # PostgreSQL wire protocol
+      - "9003:9003"   # Health / min health check
+    volumes:
+      - questdb_data:/var/lib/questdb
+    environment:
+      - QDB_LOG_W_STDOUT_LEVEL=ERROR
+
+volumes:
+  questdb_data:

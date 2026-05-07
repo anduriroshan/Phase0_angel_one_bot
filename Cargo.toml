@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "common",
+    "ingestion",
+    "storage",
+    "circuit_breaker",
+]
+resolver = "2"
