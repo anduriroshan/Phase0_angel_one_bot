@@ -64,6 +64,7 @@
 ## Top-Level
 
 - [glossary](glossary.md) — canonical term definitions; if a term isn't here, it has no agreed-upon meaning
+- [PHASE_1_CHECKLIST](PHASE_1_CHECKLIST.md) — **active build order**; the next 22 steps to ship Phase 1 (read this if you are about to write code)
 - [README](README.md) — directory tour and reading order
 
 ---
