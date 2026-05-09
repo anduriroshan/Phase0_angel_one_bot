@@ -76,11 +76,12 @@ knowledge/
 ### For AI Agents
 
 1. **Always start with `INDEX.md`** to know what exists, then `glossary.md` to ensure consistent terminology.
-2. Read `vision/system_philosophy.md` to understand the system's axioms.
-3. Read the agent file matching your role (`agents/rust_engineer.md`, `agents/strategy_engineer.md`, etc.).
-4. Read `standards/rust_patterns.md` before writing any code.
-5. Check `adr/` before making architectural decisions — the decision may already be made.
-6. Read `examples/` to understand end-to-end behavior before modifying a component.
+2. **If you are about to write code, read [PHASE_1_CHECKLIST.md](PHASE_1_CHECKLIST.md) first** — it tells you which step is next, in what order, with concrete acceptance criteria.
+3. Read `vision/system_philosophy.md` to understand the system's axioms.
+4. Read the agent file matching your role (`agents/rust_engineer.md`, `agents/strategy_engineer.md`, etc.).
+5. Read `standards/rust_patterns.md` before writing any code.
+6. Check `adr/` before making architectural decisions — the decision may already be made.
+7. Read `examples/` to understand end-to-end behavior before modifying a component.
 
 ### For Humans
 
