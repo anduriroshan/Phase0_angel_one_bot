@@ -16,6 +16,7 @@
 - [ADR-004 — Order Book Representation (fixed top-5 arrays)](adr/ADR-004-order-book-representation.md) — Phase 1 book layout
 - [ADR-005 — Replay Determinism](adr/ADR-005-replay-determinism.md) — what determinism guarantees and what it doesn't
 - [ADR-006 — Execution Engine Isolation (dedicated task, same binary)](adr/ADR-006-execution-engine-isolation.md) — why execution is a Tokio task, not a process
+- [ADR-007 — NautilusTrader as Foundation](adr/ADR-007-nautilus-trader-foundation.md) — use open-source trading engine; only write the Angel One adapter + NSE risk layer
 
 ## Agents (AI Agent Instruction Sets)
 
