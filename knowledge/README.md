@@ -62,13 +62,13 @@ knowledge/
 │   ├── risk_engineer.md               ← kill switch + pre-trade checks
 │   └── performance_auditor.md         ← measurement-driven optimization
 │
-└── (reference material — vendored, not documents)
+└── references/                        ← vendored sources (DO NOT load wholesale)
     ├── disruptor/                     ← LMAX Disruptor source
-    ├── nautilus_trader/                ← NautilusTrader source (Rust trading engine)
+    ├── nautilus_trader/               ← NautilusTrader source (Rust trading engine)
     ├── 1312.0563v2.pdf                ← queue-reactive LOB models
-    ├── 1808.03668v6.pdf                ← DeepLOB (Zhang/Zohren/Roberts)
-    ├── 1909.12926v1.pdf                ← LOB / microstructure
-    └── 2102.10925v1.pdf                ← microstructure features
+    ├── 1808.03668v6.pdf               ← DeepLOB (Zhang/Zohren/Roberts)
+    ├── 1909.12926v1.pdf               ← LOB / microstructure
+    └── 2102.10925v1.pdf               ← microstructure features
 ```
 
 ## How to Use This
@@ -92,13 +92,17 @@ knowledge/
 
 ## Reference Material
 
-The `disruptor/`, `nautilus_trader/`, and `*.pdf` files in this directory are **external sources** vendored for offline reference. They are not architectural docs:
+Vendored sources live in `knowledge/references/`. They are **not architectural docs** — they are external sources to consult for specific targeted lookups only.
 
-- **`nautilus_trader/`** — A production Rust trading engine. Specific subpaths are cited from individual runtime docs (e.g., `runtime/order_book.md` cites `nautilus_trader/crates/model/src/orderbook/`). Use it as a "stand on shoulders" reference, not a copy-paste source.
-- **`disruptor/`** — LMAX Disruptor. Reference for event-sourcing, lock-free messaging, ring-buffer architecture.
-- **PDFs** — Academic papers, queued for Phase 2 ML work (DeepLOB, queue-reactive models, microstructure features). Distillation into focused md files is deferred until Phase 1 ships.
+> **Agents: do NOT glob or read `references/` wholesale.** It contains a full
+> Rust trading engine repo and academic PDFs. Loading it will consume your
+> entire context window. Use `Grep` with a specific pattern and path instead.
 
-These files are not committed to git (they are too large and may have separate licensing). Each engineer / agent is expected to have them locally. See [INDEX.md](INDEX.md) for the full reference list.
+- **`references/nautilus_trader/`** — A production Rust trading engine. Specific subpaths are cited in individual runtime docs (e.g., `runtime/order_book.md` → `references/nautilus_trader/crates/model/src/orderbook/`). Use it as a "stand on shoulders" reference, not a copy-paste source.
+- **`references/disruptor/`** — LMAX Disruptor source. Reference for event-sourcing, lock-free messaging, ring-buffer architecture. Useful for `runtime/state_engine.md`, `runtime/event_bus.md`.
+- **`references/*.pdf`** — Academic papers, queued for Phase 2 ML work (DeepLOB, queue-reactive models, microstructure features). Distillation into focused md files is deferred until Phase 1 ships.
+
+These files are not committed to git (too large, separate licensing). See [INDEX.md](INDEX.md) for the full reference list with subpath hints.
 
 ## Maintenance Rules
 

@@ -71,13 +71,13 @@
 
 ## Reference Material (Vendored, Not Documents)
 
-These live in `knowledge/` but are not architectural docs. They are external sources to consult during work.
+These live in `knowledge/references/`. **Do NOT load wholesale** — use `Grep` with a specific pattern and subpath.
 
-- `knowledge/disruptor/` — LMAX Disruptor source. Reference for event-sourcing, lock-free messaging, ring-buffer architecture. Useful for [runtime/state_engine.md](runtime/state_engine.md), [runtime/event_bus.md](runtime/event_bus.md).
-- `knowledge/nautilus_trader/` — NautilusTrader source (Rust-native production trading engine). Reference for nearly every runtime component. Specific subpaths cited in individual docs.
-- `knowledge/1312.0563v2.pdf` — Queue-reactive limit-order-book models. Phase 2 reading for fill model C and microstructure features.
-- `knowledge/1808.03668v6.pdf` — DeepLOB (Zhang, Zohren, Roberts). Phase 2 reading for ML on order book tensors.
-- `knowledge/1909.12926v1.pdf` — Order-book / microstructure paper. Phase 2 reference.
-- `knowledge/2102.10925v1.pdf` — Microstructure features paper. Phase 2 reference.
+- `knowledge/references/disruptor/` — LMAX Disruptor source. Reference for event-sourcing, lock-free messaging, ring-buffer architecture. Useful for [runtime/state_engine.md](runtime/state_engine.md), [runtime/event_bus.md](runtime/event_bus.md).
+- `knowledge/references/nautilus_trader/` — NautilusTrader source (Rust-native production trading engine). Reference for nearly every runtime component. Specific subpaths cited in individual docs.
+- `knowledge/references/1312.0563v2.pdf` — Queue-reactive limit-order-book models. Phase 2 reading for fill model C and microstructure features.
+- `knowledge/references/1808.03668v6.pdf` — DeepLOB (Zhang, Zohren, Roberts). Phase 2 reading for ML on order book tensors.
+- `knowledge/references/1909.12926v1.pdf` — Order-book / microstructure paper. Phase 2 reference.
+- `knowledge/references/2102.10925v1.pdf` — Microstructure features paper. Phase 2 reference.
 
 The Phase 2 ML knowledge folder (`knowledge/ml/`) does not yet exist. Distillation of the PDFs into focused md files is deferred until Phase 1 reveals which features are actually computable from our SnapQuote feed (we have L2 top-5, not L3 TBT — many DeepLOB features are not directly applicable).
