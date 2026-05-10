@@ -1,0 +1,25 @@
+[package]
+name = "risk_nse"
+version = "0.1.0"
+edition = "2021"
+description = "NSE F&O pre-trade risk checks for the Angel One trading system"
+
+[dependencies]
+anyhow     = "1"
+serde      = { version = "1", features = ["derive"] }
+thiserror  = "2"
+toml       = "0.8"
+tracing    = "0.1"
+
+# NautilusTrader model types (orders, instruments, quantities)
+nautilus-model  = { workspace = true }
+nautilus-common = { workspace = true }
+nautilus-core   = { workspace = true }
+
+# Timezone conversion for trading-session checks
+chrono     = { version = "0.4", features = ["clock"] }
+chrono-tz  = "0.10"
+
+[dev-dependencies]
+# Property-based testing
+proptest = "1"

@@ -4,5 +4,29 @@ members = [
     "ingestion",
     "storage",
     "circuit_breaker",
+    "adapter_angelone",
+    "risk_nse",
+    "strategy_basis_arb",
+    "trading",
 ]
 resolver = "2"
+
+# ---------------------------------------------------------------------------
+# NautilusTrader — pinned to vendored commit (ADR-007)
+# nautilus-trader pinned to: 4d0a965f7e (2026-05-09)
+# Upgrade requires a new ADR entry or a `// reason: upgraded to <sha>` comment.
+# ---------------------------------------------------------------------------
+[workspace.dependencies]
+nautilus-model = { git = "https://github.com/nautechsystems/nautilus_trader", rev = "4d0a965f7e" }
+nautilus-common = { git = "https://github.com/nautechsystems/nautilus_trader", rev = "4d0a965f7e" }
+nautilus-core = { git = "https://github.com/nautechsystems/nautilus_trader", rev = "4d0a965f7e" }
+nautilus-data = { git = "https://github.com/nautechsystems/nautilus_trader", rev = "4d0a965f7e" }
+nautilus-execution = { git = "https://github.com/nautechsystems/nautilus_trader", rev = "4d0a965f7e" }
+nautilus-portfolio = { git = "https://github.com/nautechsystems/nautilus_trader", rev = "4d0a965f7e" }
+nautilus-risk = { git = "https://github.com/nautechsystems/nautilus_trader", rev = "4d0a965f7e" }
+nautilus-trading = { git = "https://github.com/nautechsystems/nautilus_trader", rev = "4d0a965f7e" }
+nautilus-backtest = { git = "https://github.com/nautechsystems/nautilus_trader", rev = "4d0a965f7e" }
+nautilus-persistence = { git = "https://github.com/nautechsystems/nautilus_trader", rev = "4d0a965f7e" }
+nautilus-live = { git = "https://github.com/nautechsystems/nautilus_trader", rev = "4d0a965f7e", default-features = false }
+nautilus-system = { git = "https://github.com/nautechsystems/nautilus_trader", rev = "4d0a965f7e" }
+nautilus-testkit = { git = "https://github.com/nautechsystems/nautilus_trader", rev = "4d0a965f7e" }

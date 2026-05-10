@@ -1,0 +1,43 @@
+# Live trading node configuration
+#
+# Credentials are NEVER stored here — load via environment variables:
+#   ANGEL_CLIENT_ID        — Angel One login ID
+#   ANGEL_PASSWORD         — Angel One login password
+#   ANGEL_TOTP_SECRET      — Base32 TOTP secret (for 2FA)
+#   ANGEL_API_KEY          — SmartAPI key
+#   ANGEL_ONE_DRY_RUN      — "false" to enable live orders (default: true = dry run)
+
+# NautilusTrader trader identifier (must contain a dash)
+trader_id = "ANGEL-TRADER-001"
+
+# Angel One account identifier (must contain a dash, match your demat account)
+account_id = "ANGEL-A321480"
+
+# Exchange venue registered in NautilusTrader
+venue = "NSE"
+
+# Data client identifier
+data_client_id = "ANGEL_ONE"
+
+# ---------------------------------------------------------------------------
+# Instruments
+# Each entry maps an Angel One token → NautilusTrader InstrumentId.
+# exchange: "NFO" for F&O instruments, "NSE" for equities/index.
+# expiry_utc: RFC 3339 format, required for F&O to enable physical-settlement
+#             and STT-trap checks.
+# ---------------------------------------------------------------------------
+
+[[instruments]]
+symbol              = "NIFTY26JUNFUT"
+token               = 57515
+trading_symbol      = "NIFTY25JUNFUT"
+exchange            = "NFO"
+expiry_utc          = "2026-06-26T09:30:00Z"
+is_physical_settlement = false
+
+[[instruments]]
+symbol              = "NIFTY"
+token               = 26009
+trading_symbol      = "NIFTY50"
+exchange            = "NSE"
+# No expiry_utc — spot index, no expiry check needed
