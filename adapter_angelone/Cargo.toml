@@ -1,0 +1,36 @@
+[package]
+name = "adapter_angelone"
+version = "0.1.0"
+edition = "2021"
+description = "NautilusTrader DataClient + ExecutionClient for Angel One SmartAPI"
+
+[dependencies]
+common = { path = "../common" }
+risk_nse = { path = "../risk_nse" }
+chrono = { version = "0.4", features = ["clock"] }
+nautilus-model  = { workspace = true }
+nautilus-common = { workspace = true, features = ["live"] }
+nautilus-core   = { workspace = true }
+nautilus-data   = { workspace = true }
+
+anyhow      = "1"
+async-trait = "0.1"
+reqwest     = { version = "0.12", features = ["json"] }
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+thiserror   = "2"
+tokio       = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures-util = "0.3"
+totp-rs     = "5.6"
+tracing     = "0.1"
+ahash       = "0.8"
+tokio-util  = "0.7"
+toml        = "0.8"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+nautilus-backtest = { workspace = true }
+nautilus-trading   = { workspace = true }
+nautilus-model     = { workspace = true }
+ustr = "1.1"

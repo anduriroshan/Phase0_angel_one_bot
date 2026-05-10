@@ -1,0 +1,28 @@
+# Basis-arb strategy configuration
+#
+# All parameters are loaded at startup. Changes require a restart.
+# schema_version must be bumped whenever fields are added or removed.
+# See strategy_basis_arb/src/config.rs for field rationale.
+
+schema_version = 1
+
+# Rolling window for basis statistics (seconds).
+# reason: 60 s captures intraday dislocations without over-fitting to noise.
+window_secs = 60
+
+# Z-score threshold for signal emission.
+# reason: 2σ dislocations are statistically uncommon; balances signal quality vs. frequency.
+z_score_threshold = 2.0
+
+# Minimum samples before a signal can be emitted.
+# reason: z-score is undefined with < 2 samples; 30 gives stable variance estimate.
+min_samples = 30
+
+# NautilusTrader instrument IDs (symbol.venue format).
+# These must match the instrument IDs registered in the LiveTradingNode.
+futures_instrument_id = "NIFTY26JUNFUT.NSE"
+spot_instrument_id    = "NIFTY.NSE"
+
+# Order quantity in units (not lots). 75 = 1 NIFTY lot (post Apr-2024 revision).
+# reason: minimum tradable size; risk_nse enforces lot-size alignment.
+trade_qty_units = 75

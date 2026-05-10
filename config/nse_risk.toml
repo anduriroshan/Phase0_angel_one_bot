@@ -1,0 +1,54 @@
+# NSE F&O pre-trade risk configuration
+#
+# IMPORTANT: verify all values against current NSE circulars and Angel One
+# instrument master before enabling live trading (ANGEL_ONE_DRY_RUN=false).
+# Numbers here are indicative defaults for paper trading.
+#
+# See knowledge/domain/nse_fo_specifics.md for rationale behind each field.
+
+# Global limits (apply to all instruments unless overridden below)
+max_order_notional_inr = 50_000_000      # ₹5 crore single-order cap
+max_position_lots = 50                    # max lots per instrument
+
+# STT-trap warning: emit loud warning when long option position is within
+# this many minutes of expiry.  Does not reject — just warns.
+# reason: STT on exercise ~20× higher than STT on sale; nse_fo_specifics.md §STT Trap.
+stt_trap_warning_minutes_before_expiry = 60
+
+# Physical settlement rejection window: reject new orders on physical-settlement
+# stock F&O contracts within this many minutes of expiry.
+# reason: SEBI physical settlement mandate (Oct 2019); prevents unintended delivery.
+physical_settlement_reject_minutes_before_expiry = 90
+
+# ---------------------------------------------------------------------------
+# Per-instrument overrides
+# ---------------------------------------------------------------------------
+#
+# Key must match the NautilusTrader symbol string exactly.
+# lot_size and freeze_qty must be verified against Angel One instrument master.
+
+[instruments.NIFTY26JUNFUT]
+# reason: NIFTY lot size = 75 (post Apr-2024 revision from 50)
+# Verify: nseindia.com/products-services/equity-derivatives-trading-info
+lot_size = 75
+# reason: indicative freeze ~1800 lots × 75 = 135000 units; verify vs NSE circular
+freeze_qty = 135_000
+physical_settlement = false    # index future — cash settled
+
+[instruments.BANKNIFTY26JUNFUT]
+# reason: BANKNIFTY lot size = 15
+lot_size = 15
+freeze_qty = 13_500            # indicative ~900 lots × 15
+physical_settlement = false
+
+[instruments.FINNIFTY26JUNFUT]
+# reason: FINNIFTY lot size = 25
+lot_size = 25
+freeze_qty = 22_500            # indicative
+physical_settlement = false
+
+# Stock F&O example (physical settlement)
+# [instruments.RELIANCE26JUN3000CE]
+# lot_size = 250
+# freeze_qty = 10_000
+# physical_settlement = true   # stock option — physical delivery at expiry

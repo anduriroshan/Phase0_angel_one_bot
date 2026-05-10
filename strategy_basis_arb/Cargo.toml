@@ -1,0 +1,21 @@
+[package]
+name = "strategy_basis_arb"
+version = "0.1.0"
+edition = "2021"
+description = "NIFTY-futures-vs-spot basis-arb strategy for the Angel One trading system"
+
+[dependencies]
+anyhow   = "1"
+serde    = { version = "1", features = ["derive"] }
+thiserror = "2"
+toml     = "0.8"
+tracing  = "0.1"
+
+nautilus-model   = { workspace = true }
+nautilus-common  = { workspace = true }
+nautilus-core    = { workspace = true }
+nautilus-trading = { workspace = true }
+ustr             = "1.1"
+
+[dev-dependencies]
+nautilus-backtest = { workspace = true }

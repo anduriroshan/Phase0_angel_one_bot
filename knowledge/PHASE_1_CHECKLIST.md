@@ -190,7 +190,7 @@ not in any generic framework.
 
 ### Step 6 — `strategy_basis_arb` — first runnable strategy
 
-- [ ] **What:** basis-arb strategy implementing NautilusTrader's `Actor` trait.
+- [x] **What:** basis-arb strategy implementing NautilusTrader's `Actor` trait.
   Detects NIFTY-futures-vs-spot-index basis dislocations; trades 1 lot when
   z-score exceeds threshold.
 - **Where:** new crate `strategy_basis_arb/`.
@@ -220,7 +220,7 @@ not in any generic framework.
 
 ### Step 7 — Replay-determinism test for the strategy
 
-- [ ] **What:** run the strategy through the same `QuoteTick` sequence twice
+- [x] **What:** run the strategy through the same `QuoteTick` sequence twice
   using NautilusTrader's `TestClock`; assert bit-identical orders emitted.
 - **Where:** `strategy_basis_arb/tests/determinism.rs`.
 - **Agent:** `strategy_engineer`.
@@ -239,7 +239,7 @@ not in any generic framework.
 
 ### Step 8 — `trading` binary with `LiveTradingNode`
 
-- [ ] **What:** production binary that wires `AngelOneDataClient` +
+- [x] **What:** production binary that wires `AngelOneDataClient` +
   `AngelOneExecutionClient` + `NseRiskCheck` + `BasisArbStrategy` into a
   NautilusTrader `LiveTradingNode`.
 - **Where:** new binary crate `trading/src/main.rs`.
