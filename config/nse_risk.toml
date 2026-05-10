@@ -52,3 +52,29 @@ physical_settlement = false
 # lot_size = 250
 # freeze_qty = 10_000
 # physical_settlement = true   # stock option — physical delivery at expiry
+
+# ---------------------------------------------------------------------------
+# Equity intraday instruments (MIS, lot_size = 1)
+# Freeze qty for NSE equities: NSE circular NSCCL/CMPT/59063 (Dec 2023)
+# ⚠️  Verify freeze quantities before live trading.
+# ---------------------------------------------------------------------------
+
+[instruments.INFY]
+# reason: NSE equity — minimum tradable = 1 share, no lot-size concept.
+lot_size = 1
+# reason: NSE equity freeze qty ≈ 10% of avg daily delivery; conservative cap for intraday.
+# INFY avg daily vol ~8M shares; freeze at 1000 shares = negligible risk.
+freeze_qty = 1_000
+physical_settlement = false    # equity cash — no F&O physical settlement
+
+[instruments.HCLTECH]
+lot_size = 1
+# HCL Tech similar liquidity profile to INFY; freeze_qty conservative.
+freeze_qty = 1_000
+physical_settlement = false
+
+[instruments.SUNPHARMA]
+lot_size = 1
+# Sun Pharma slightly lower liquidity; tighter freeze cap.
+freeze_qty = 500
+physical_settlement = false

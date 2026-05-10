@@ -40,6 +40,7 @@ use nautilus_model::identifiers::{AccountId, ClientId, InstrumentId, Symbol, Tra
 use risk_nse::NseRiskCheck;
 use serde::Deserialize;
 use strategy_basis_arb::{BasisArbConfig, BasisArbParams, BasisArbStrategy};
+use strategy_intraday_vwap::{IntradayVwapConfig, IntradayVwapParams, IntradayVwapStrategy};
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 use zeromq::{PubSocket, Socket, SocketSend};
@@ -88,6 +89,15 @@ struct InstrumentEntry {
     /// Whether this instrument settles physically (stock F&O).
     #[serde(default)]
     is_physical_settlement: bool,
+
+    /// Angel One product type: "MIS" (intraday), "CARRYFORWARD" (F&O positional), "NRML" (equity delivery).
+    /// Default: "CARRYFORWARD" (safe for F&O; override to "MIS" for equity intraday).
+    #[serde(default = "default_product_type")]
+    product_type: String,
+}
+
+fn default_product_type() -> String {
+    "CARRYFORWARD".to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +138,7 @@ fn build_instrument_maps(
                 exchange: entry.exchange.clone(),
                 expiry_utc,
                 is_physical_settlement: entry.is_physical_settlement,
+                product_type: entry.product_type.clone(),
             },
         );
     }
@@ -286,8 +297,14 @@ async fn main() -> anyhow::Result<()> {
     );
     let strategy = BasisArbStrategy::new(BasisArbConfig::new(strategy_params, futures_id, spot_id));
     node.add_strategy(strategy)?;
-
     info!("BasisArbStrategy registered");
+
+    // --- Load and register IntradayVwapStrategy ---
+    let vwap_params = IntradayVwapParams::from_file("config/strategy_intraday_vwap.toml")
+        .map_err(|e| anyhow::anyhow!("Cannot load config/strategy_intraday_vwap.toml: {e}"))?;
+    let vwap_strategy = IntradayVwapStrategy::new(IntradayVwapConfig::new(vwap_params));
+    node.add_strategy(vwap_strategy)?;
+    info!("IntradayVwapStrategy registered");
 
     // --- Start ZMQ heartbeat ---
     let (hb_stop, hb_handle) = spawn_heartbeat_task();

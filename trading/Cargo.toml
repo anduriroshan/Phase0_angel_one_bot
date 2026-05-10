@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 adapter_angelone    = { path = "../adapter_angelone" }
 strategy_basis_arb  = { path = "../strategy_basis_arb" }
+strategy_intraday_vwap = { path = "../strategy_intraday_vwap" }
 risk_nse            = { path = "../risk_nse" }
 common              = { path = "../common" }
 

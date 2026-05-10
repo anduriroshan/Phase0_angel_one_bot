@@ -3270,6 +3270,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "strategy_intraday_vwap"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "chrono-tz",
+ "nautilus-backtest",
+ "nautilus-common",
+ "nautilus-core",
+ "nautilus-model",
+ "nautilus-trading",
+ "serde",
+ "toml 0.8.23",
+ "tracing",
+ "ustr",
+]
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3823,6 +3841,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strategy_basis_arb",
+ "strategy_intraday_vwap",
  "tokio",
  "toml 0.8.23",
  "tracing",
