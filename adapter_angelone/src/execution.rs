@@ -54,6 +54,11 @@ pub struct InstrumentMapping {
     /// Whether this instrument settles physically at expiry (stock F&O).
     /// `false` for index F&O (cash-settled).
     pub is_physical_settlement: bool,
+    /// Angel One product type for order placement.
+    /// - `"MIS"` — Margin Intraday Square-off (auto-squared at 15:15; higher leverage).
+    /// - `"CARRYFORWARD"` — positional / overnight (NRML equivalent for F&O).
+    /// - `"NRML"` — delivery/positional for equities.
+    pub product_type: String,
 }
 
 /// Configuration for `AngelOneExecutionClient`.
@@ -262,7 +267,7 @@ impl AngelOneExecutionClient {
             "transactiontype": Self::side_str(init.order_side),
             "exchange": mapping.exchange,
             "ordertype": Self::order_type_str(init.order_type),
-            "producttype": "CARRYFORWARD",
+            "producttype": mapping.product_type,
             "duration": Self::tif_str(init.time_in_force),
             "price": price_str,
             "triggerprice": trigger_str,

@@ -1,0 +1,44 @@
+# VWAP mean-reversion intraday strategy configuration
+#
+# Signal: when (price - session_mean) / rolling_std exceeds z_score_threshold,
+# enter a mean-reversion trade.  Exit when price reverts or at the MIS cutoff time.
+
+schema_version = 1
+
+# Number of ticks in the rolling std-dev window.
+# 40 ticks ≈ 2 minutes at ~20 ticks/sec for liquid large-caps.
+rolling_window = 40
+
+# Enter when |z| >= this value.  2.0 = 2 standard deviations from session mean.
+# reason: balances false positives vs. catching real dislocations.
+z_score_threshold = 2.0
+
+# Exit when |z| falls below this value (price reverted back toward mean).
+exit_z_threshold = 0.5
+
+# Minimum ticks before signals are emitted (session warm-up).
+# Must match or exceed rolling_window to have valid statistics.
+min_samples = 40
+
+# Capital allocated per stock (INR).  Position size uses this as the base.
+# ₹50,000 per stock × 3 stocks = ₹1.5L deployed; MIS gives ~5x leverage → ₹7.5L gross.
+capital_per_stock_inr = 50_000.0
+
+# Maximum signal multiplier applied to base quantity.
+# Actual qty = floor(capital / price) × min(|z| / threshold, max_signal_multiplier)
+# 2.0 means at 2σ or above we use 2× the base quantity.
+max_signal_multiplier = 2.0
+
+# Hard cap on shares per stock regardless of signal strength.
+# Prevents very-low-price stocks from generating enormous positions.
+max_qty_per_stock = 200
+
+# Force-close all open MIS positions at this IST time (HH:MM).
+# MIS auto-squares at 15:15; we close at 14:45 to avoid market impact
+# and give 30 minutes of buffer.
+exit_hour_ist   = 14
+exit_minute_ist = 45
+
+# Stocks to trade (must be registered in config/trading.toml and config/nse_risk.toml).
+symbols = ["INFY", "HCLTECH", "SUNPHARMA"]
+venue   = "NSE"
