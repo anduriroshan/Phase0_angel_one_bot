@@ -204,12 +204,9 @@ fn spawn_heartbeat_task() -> (Arc<std::sync::atomic::AtomicBool>, tokio::task::J
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // --- Logging ---
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .with_target(true)
-        .init();
+    // Note: We DO NOT initialize tracing_subscriber here.
+    // NautilusTrader's LiveNode automatically initializes its own logger.
+    // Initializing twice causes a "non-Nautilus logger is already registered" panic.
 
     info!("Angel One LiveTradingNode starting");
 
