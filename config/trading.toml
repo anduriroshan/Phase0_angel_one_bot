@@ -58,14 +58,14 @@ product_type        = "MIS"         # Intraday — auto-squared at 15:15
 
 [[instruments]]
 symbol              = "HCLTECH"
-token               = 7229          # VERIFY from ScripMaster
+token               = 7229           # Verified from ScripMaster
 trading_symbol      = "HCLTECH-EQ"
 exchange            = "NSE"
 product_type        = "MIS"
 
 [[instruments]]
 symbol              = "SUNPHARMA"
-token               = 3045          # VERIFY from ScripMaster
+token               = 3351          # Verified from ScripMaster
 trading_symbol      = "SUNPHARMA-EQ"
 exchange            = "NSE"
 product_type        = "MIS"
