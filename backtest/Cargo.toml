@@ -11,6 +11,7 @@ nautilus-execution = { workspace = true }
 nautilus-backtest = { workspace = true }
 nautilus-persistence = { workspace = true }
 nautilus-risk = { workspace = true }
+nautilus-core = { workspace = true }
 
 common = { path = "../common" }
 strategy_basis_arb = { path = "../strategy_basis_arb" }
