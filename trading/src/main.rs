@@ -41,6 +41,7 @@ use risk_nse::NseRiskCheck;
 use serde::Deserialize;
 use strategy_basis_arb::{BasisArbConfig, BasisArbParams, BasisArbStrategy};
 use strategy_intraday_vwap::{IntradayVwapConfig, IntradayVwapParams, IntradayVwapStrategy};
+use storage::storage_consumer;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 use zeromq::{PubSocket, Socket, SocketSend};
@@ -108,17 +109,24 @@ fn build_instrument_maps(
     entries: &[InstrumentEntry],
     venue: &str,
 ) -> (
-    HashMap<u32, InstrumentId>,      // token → instrument_id (for DataClient)
-    HashMap<InstrumentId, InstrumentMapping>, // instrument_id → mapping (for ExecClient)
+    HashMap<u32, InstrumentId>,              // token → instrument_id (DataClient)
+    HashMap<u32, u8>,                        // token → exchange_type (1=NSE_CM, 2=NSE_FO)
+    HashMap<InstrumentId, InstrumentMapping>, // instrument_id → mapping (ExecClient)
 ) {
     let venue = Venue::new(venue);
     let mut data_map = HashMap::new();
+    let mut exchange_map: HashMap<u32, u8> = HashMap::new();
     let mut exec_map = HashMap::new();
 
     for entry in entries {
         let instrument_id = InstrumentId::new(Symbol::new(&entry.symbol), venue);
 
+        // NSE equities and index live on NSE_CM (exchange_type=1).
+        // NFO derivatives live on NSE_FO (exchange_type=2).
+        let exchange_type: u8 = if entry.exchange == "NFO" { 2 } else { 1 };
+
         data_map.insert(entry.token, instrument_id);
+        exchange_map.insert(entry.token, exchange_type);
 
         let expiry_utc = entry.expiry_utc.as_deref().and_then(|s| {
             chrono::DateTime::parse_from_rfc3339(s)
@@ -143,7 +151,7 @@ fn build_instrument_maps(
         );
     }
 
-    (data_map, exec_map)
+    (data_map, exchange_map, exec_map)
 }
 
 // ---------------------------------------------------------------------------
@@ -238,7 +246,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // --- Build instrument maps ---
-    let (data_instrument_map, exec_instrument_map) =
+    let (data_instrument_map, token_exchange_map, exec_instrument_map) =
         build_instrument_maps(&trading_cfg.instruments, &trading_cfg.venue);
 
     // --- Build client configs ---
@@ -247,12 +255,20 @@ async fn main() -> anyhow::Result<()> {
     let exec_client_id = ClientId::new("ANGEL_ONE_EXEC");
     let account_id = AccountId::new(&trading_cfg.account_id);
 
+    // --- Storage pipeline: every raw tick is also written to QuestDB + Parquet ---
+    // Buffer of 8192 ticks (~400 ms at 20 ticks/s × 5 instruments) before backpressure.
+    std::fs::create_dir_all("./data/raw").ok();
+    let (tick_tx, tick_rx) = tokio::sync::mpsc::channel(8192);
+    tokio::spawn(storage_consumer(tick_rx));
+    info!("Storage consumer spawned — writing ticks to QuestDB + ./data/raw/");
+
     let data_cfg = AngelOneDataClientConfig::new(
         data_client_id,
         venue,
         data_instrument_map,
-        2, // exchange_type=2: NSE_FO (derivatives)
-    );
+        token_exchange_map,
+    )
+    .with_tick_sender(tick_tx);
 
     let exec_cfg = AngelOneExecutionClientConfig::new(
         exec_client_id,

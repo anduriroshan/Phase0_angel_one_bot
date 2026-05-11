@@ -14,6 +14,7 @@ strategy_basis_arb  = { path = "../strategy_basis_arb" }
 strategy_intraday_vwap = { path = "../strategy_intraday_vwap" }
 risk_nse            = { path = "../risk_nse" }
 common              = { path = "../common" }
+storage             = { path = "../storage" }
 
 nautilus-model   = { workspace = true }
 nautilus-common  = { workspace = true, features = ["live"] }

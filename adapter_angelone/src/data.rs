@@ -69,24 +69,53 @@ impl AngelOneDataClient {
         }
     }
 
-    fn build_subscribe_payload(&self, exchange_type: u8) -> serde_json::Value {
-        let tokens: Vec<String> = self.config.instrument_map.keys().map(|t| t.to_string()).collect();
-        json!({ "action": 1, "params": { "mode": 3, "tokenList": [{ "exchangeType": exchange_type, "tokens": tokens }] } })
+    /// Builds subscribe payloads grouped by exchange type.
+    ///
+    /// Angel One requires tokens to be grouped per exchange type in the subscription.
+    /// Returns one JSON payload per distinct exchange type present in the instrument map.
+    fn build_subscribe_payloads(&self) -> Vec<String> {
+        // Group tokens by exchange_type: 1=NSE_CM (equities), 2=NSE_FO (derivatives)
+        let mut by_exchange: std::collections::BTreeMap<u8, Vec<String>> =
+            std::collections::BTreeMap::new();
+        for (token, &exchange_type) in &self.config.token_exchange_map {
+            by_exchange
+                .entry(exchange_type)
+                .or_default()
+                .push(token.to_string());
+        }
+
+        by_exchange
+            .into_iter()
+            .map(|(exchange_type, tokens)| {
+                serde_json::json!({
+                    "action": 1,
+                    "params": {
+                        "mode": 3,
+                        "tokenList": [{
+                            "exchangeType": exchange_type,
+                            "tokens": tokens
+                        }]
+                    }
+                })
+                .to_string()
+            })
+            .collect()
     }
 
     fn spawn_ws_task(
         ws_url: String,
         feed_token: String,
         client_id_str: String,
-        subscribe_payload: String,
+        subscribe_payloads: Vec<String>,
         instrument_map: HashMap<u32, InstrumentId>,
         quote_subs: AHashSet<InstrumentId>,
         book_subs: AHashSet<InstrumentId>,
         data_sender: tokio::sync::mpsc::UnboundedSender<DataEvent>,
         cancellation_token: CancellationToken,
+        tick_sender: Option<tokio::sync::mpsc::Sender<common::Tick>>,
     ) -> JoinHandle<()> {
         get_runtime().spawn(async move {
-            if let Err(e) = Self::ws_loop(ws_url, feed_token, client_id_str, subscribe_payload, instrument_map, quote_subs, book_subs, data_sender, cancellation_token).await {
+            if let Err(e) = Self::ws_loop(ws_url, feed_token, client_id_str, subscribe_payloads, instrument_map, quote_subs, book_subs, data_sender, cancellation_token, tick_sender).await {
                 error!("Angel One WS task exited with error: {e}");
             }
         })
@@ -96,12 +125,13 @@ impl AngelOneDataClient {
         ws_url: String,
         feed_token: String,
         client_id_str: String,
-        subscribe_payload: String,
+        subscribe_payloads: Vec<String>,
         instrument_map: HashMap<u32, InstrumentId>,
         quote_subs: AHashSet<InstrumentId>,
         book_subs: AHashSet<InstrumentId>,
         data_sender: tokio::sync::mpsc::UnboundedSender<DataEvent>,
         cancellation_token: CancellationToken,
+        tick_sender: Option<tokio::sync::mpsc::Sender<common::Tick>>,
     ) -> anyhow::Result<()> {
         let request = {
             use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -114,8 +144,11 @@ impl AngelOneDataClient {
         info!("Connecting to Angel One SmartStream WebSocket...");
         let (mut ws_stream, _) = connect_async(request).await?;
         info!("Angel One SmartStream WebSocket connected");
-        ws_stream.send(Message::Text(subscribe_payload.into())).await?;
-        info!("Sent Angel One subscribe payload");
+        // Send one subscription message per exchange type (NSE_CM and NSE_FO separately).
+        for payload in &subscribe_payloads {
+            ws_stream.send(Message::Text(payload.clone().into())).await?;
+            info!("Sent Angel One subscribe payload: {}", &payload[..payload.len().min(120)]);
+        }
         let mut seq_map: HashMap<u32, i64> = HashMap::new();
         loop {
             tokio::select! {
@@ -128,7 +161,7 @@ impl AngelOneDataClient {
                     match msg {
                         Some(Ok(Message::Binary(bytes))) => {
                             let ts_init = UnixNanos::from(get_atomic_clock_realtime().get_time_ns().as_u64());
-                            Self::handle_binary_frame(&bytes, &instrument_map, &quote_subs, &book_subs, &data_sender, &mut seq_map, ts_init);
+                            Self::handle_binary_frame(&bytes, &instrument_map, &quote_subs, &book_subs, &data_sender, &mut seq_map, ts_init, tick_sender.as_ref());
                         }
                         Some(Ok(Message::Text(text))) => { info!("Angel One WS text: {text}"); }
                         Some(Ok(Message::Ping(ping))) => { let _ = ws_stream.send(Message::Pong(ping)).await; }
@@ -150,11 +183,20 @@ impl AngelOneDataClient {
         data_sender: &tokio::sync::mpsc::UnboundedSender<DataEvent>,
         seq_map: &mut HashMap<u32, i64>,
         ts_init: UnixNanos,
+        tick_sender: Option<&tokio::sync::mpsc::Sender<common::Tick>>,
     ) {
         let packet = match parse_binary_packet(bytes) {
             Ok(p) => p,
             Err(e) => { warn!("Failed to parse Angel One binary frame: {e}"); return; }
         };
+
+        // Forward raw tick to storage pipeline (independent of NautilusTrader routing).
+        if let Some(sender) = tick_sender {
+            let tick = packet.to_tick();
+            if let Err(e) = sender.try_send(tick) {
+                warn!("Storage channel full or closed, tick dropped: {e}");
+            }
+        }
         let token_num: u32 = match packet.token.trim_matches('\0').parse() {
             Ok(n) => n,
             Err(_) => { warn!("Unparseable Angel One token: {:?}", packet.token); return; }
@@ -214,13 +256,13 @@ impl DataClient for AngelOneDataClient {
         self.cancellation_token = CancellationToken::new();
         let tokens = authenticate().await?;
         self.auth_tokens = Some(tokens.clone());
-        let exchange_type = self.config.exchange_type;
-        let subscribe_payload = self.build_subscribe_payload(exchange_type).to_string();
+        let subscribe_payloads = self.build_subscribe_payloads();
         let handle = Self::spawn_ws_task(
             self.config.ws_url.clone(), tokens.feed_token.clone(), tokens.client_id.clone(),
-            subscribe_payload, self.config.instrument_map.clone(),
+            subscribe_payloads, self.config.instrument_map.clone(),
             self.quote_subs.clone(), self.book_subs.clone(),
             self.data_sender.clone(), self.cancellation_token.clone(),
+            self.config.tick_sender.clone(),
         );
         self.tasks.push(handle);
         self.is_connected.store(true, Ordering::Relaxed);
