@@ -3840,6 +3840,7 @@ dependencies = [
  "risk_nse",
  "serde",
  "serde_json",
+ "storage",
  "strategy_basis_arb",
  "strategy_intraday_vwap",
  "tokio",

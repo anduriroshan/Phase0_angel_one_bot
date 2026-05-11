@@ -556,6 +556,9 @@ mod tests {
                 token: "57516".to_string(),
                 trading_symbol: "NIFTY25JUNFUT".to_string(),
                 exchange: "NFO".to_string(),
+                expiry_utc: None,
+                is_physical_settlement: false,
+                product_type: "CARRYFORWARD".to_string(),
             },
         );
         AngelOneExecutionClientConfig {
@@ -566,6 +569,7 @@ mod tests {
             dry_run: true,
             instrument_map,
             ack_timeout_ms: 5_000,
+            nse_risk: None,
         }
     }
 

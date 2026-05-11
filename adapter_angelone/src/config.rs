@@ -17,11 +17,15 @@ pub struct AngelOneDataClientConfig {
     /// Maps Angel One integer token â†’ NautilusTrader InstrumentId.
     /// Populated from `config/instruments.toml`.
     pub instrument_map: HashMap<u32, InstrumentId>,
-    /// Angel One exchange type byte for subscriptions:
-    /// 1 = NSE_CM (indices, equities), 2 = NSE_FO (derivatives).
-    pub exchange_type: u8,
+    /// Maps Angel One integer token → exchange type byte.
+    /// 1 = NSE_CM (equities/indices), 2 = NSE_FO (derivatives).
+    /// Required because a single WS subscription message covers only one exchange type.
+    pub token_exchange_map: HashMap<u32, u8>,
     /// WebSocket URL (defaults to the Angel One SmartStream endpoint).
     pub ws_url: String,
+    /// Optional channel for forwarding raw ticks to the storage pipeline.
+    /// When set, every decoded tick is also sent here for QuestDB/Parquet storage.
+    pub tick_sender: Option<tokio::sync::mpsc::Sender<common::Tick>>,
 }
 
 impl AngelOneDataClientConfig {
@@ -29,15 +33,23 @@ impl AngelOneDataClientConfig {
         client_id: ClientId,
         venue: Venue,
         instrument_map: HashMap<u32, InstrumentId>,
-        exchange_type: u8,
+        token_exchange_map: HashMap<u32, u8>,
     ) -> Self {
         Self {
             client_id,
             venue,
             instrument_map,
-            exchange_type,
+            token_exchange_map,
             ws_url: "wss://smartapisocket.angelone.in/smart-stream".to_string(),
+            tick_sender: None,
         }
+    }
+
+    /// Attach a storage channel sender so raw ticks are persisted to QuestDB/Parquet.
+    #[must_use]
+    pub fn with_tick_sender(mut self, sender: tokio::sync::mpsc::Sender<common::Tick>) -> Self {
+        self.tick_sender = Some(sender);
+        self
     }
 }
 
