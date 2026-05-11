@@ -194,28 +194,36 @@ impl ParsedPacket {
                 .map(|q| q.last_traded_qty)
                 .unwrap_or(0),
             seq_no: self.sequence_number,
+            // Angel One SnapQuote depth: best_5_buy[0] is the *highest* bid
+            // (buyers pay up to this price) and best_5_sell[0] is the *lowest*
+            // ask (sellers accept down to this price).
+            // However, empirical data shows best_5_buy[0].price > best_5_sell[0].price
+            // which means the mapping is inverted relative to the flag names:
+            // flag=0 entries are actually asks (sell side, ascending) and
+            // flag=1 entries are bids (buy side, descending).
+            // Fix: treat best_5_buy[0] as ask and best_5_sell[0] as bid.
             best_bid_price: self
                 .snap
                 .as_ref()
-                .and_then(|s| s.best_5_buy.first())
+                .and_then(|s| s.best_5_sell.first())
                 .map(|d| d.price as f64 / 100.0)
                 .unwrap_or(0.0),
             best_bid_qty: self
                 .snap
                 .as_ref()
-                .and_then(|s| s.best_5_buy.first())
+                .and_then(|s| s.best_5_sell.first())
                 .map(|d| d.qty)
                 .unwrap_or(0),
             best_ask_price: self
                 .snap
                 .as_ref()
-                .and_then(|s| s.best_5_sell.first())
+                .and_then(|s| s.best_5_buy.first())
                 .map(|d| d.price as f64 / 100.0)
                 .unwrap_or(0.0),
             best_ask_qty: self
                 .snap
                 .as_ref()
-                .and_then(|s| s.best_5_sell.first())
+                .and_then(|s| s.best_5_buy.first())
                 .map(|d| d.qty)
                 .unwrap_or(0),
         }

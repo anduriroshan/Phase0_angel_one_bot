@@ -705,8 +705,8 @@ dependencies = [
  "strategy_basis_arb",
  "strategy_intraday_vwap",
  "tokio",
+ "toml 0.8.23",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
