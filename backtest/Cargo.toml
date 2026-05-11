@@ -1,0 +1,30 @@
+[package]
+name = "backtest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nautilus-model = { workspace = true }
+nautilus-common = { workspace = true }
+nautilus-data = { workspace = true }
+nautilus-execution = { workspace = true }
+nautilus-backtest = { workspace = true }
+nautilus-persistence = { workspace = true }
+nautilus-risk = { workspace = true }
+
+common = { path = "../common" }
+strategy_basis_arb = { path = "../strategy_basis_arb" }
+strategy_intraday_vwap = { path = "../strategy_intraday_vwap" }
+risk_nse = { path = "../risk_nse" }
+adapter_angelone = { path = "../adapter_angelone" }
+
+tokio = { version = "1.0", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+chrono = "0.4"
+parquet = "54"
+arrow = "54"
+clap = { version = "4.0", features = ["derive"] }

@@ -359,3 +359,21 @@ This is achieved by:
 | **Z-score** | How many standard deviations away from the average something is |
 | **Rolling window** | Only the last N data points are considered; older ones are dropped |
 | **Dry run** | The bot calculates and logs what it *would* do, but sends no real orders |
+
+---
+
+## Phase 1 Status: Backtesting Engine (`backtest`)
+
+As part of Milestone 5 (Step 10), we have implemented a **fully-fledged Backtest Engine** to replay recorded market data over our strategies. 
+
+**What has been implemented:**
+- A `backtest` crate that sets up NautilusTrader's `BacktestEngine`.
+- A custom data ingestion pipeline that reads historical `.parquet` files from the Phase 0 `storage` pipeline.
+- Full offline simulation using the exact same strategy binaries (`BasisArbStrategy` and `IntradayVwapStrategy`) and Risk Checks (`NseRiskCheck`) that the live trading bot uses. 
+- Fast, bit-deterministic replay of millions of ticks allowing for precise parameter tuning.
+
+**What is expected out of the Backtest Engine:**
+- **Tearsheets and JSON Results:** At the end of a backtest run, the engine outputs statistics (total orders, fills, rejects, max drawdown, and overall realized PnL).
+- **Strategy Validation:** It proves whether a strategy is profitable on a given historical day. By swapping configurations (e.g., changing the entry z-score from 2.0 to 2.5), we can directly measure the impact on PnL.
+- **Latency Profiling:** It validates that the strategy logic executes well within the required nanosecond budget.
+
