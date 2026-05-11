@@ -53,7 +53,11 @@ pub enum DecodeError {
 
 /// Decode a parsed Angel One packet into a [`QuoteTick`].
 ///
-/// Uses `best_5_buy[0]` as bid and `best_5_sell[0]` as ask.
+/// Uses `best_5_sell[0]` as bid and `best_5_buy[0]` as ask.
+///
+/// Despite the flag names, empirical Angel One data shows best_5_buy[0] > best_5_sell[0]
+/// which means flag=0 entries are the ask side (ascending) and flag=1 entries are the
+/// bid side (descending). Using best_5_sell[0] as bid gives bid < ask (uncrossed book).
 /// Returns `None` if no depth data is available (e.g., index tokens with qty=0).
 pub fn packet_to_quote_tick(
     packet: &ParsedPacket,
@@ -65,8 +69,11 @@ pub fn packet_to_quote_tick(
         None => return Ok(None),
     };
 
-    let bid = snap.best_5_buy.first();
-    let ask = snap.best_5_sell.first();
+    // Empirically: best_5_buy[0] > best_5_sell[0] — flag names are inverted.
+    // best_5_sell[0] is the best bid (highest price a buyer will pay).
+    // best_5_buy[0] is the best ask (lowest price a seller will accept).
+    let bid = snap.best_5_sell.first();
+    let ask = snap.best_5_buy.first();
 
     let (bid, ask) = match (bid, ask) {
         (Some(b), Some(a)) => (b, a),
@@ -257,14 +264,18 @@ mod tests {
                 lower_circuit: 2_100_000,
                 week_52_high: 2_700_000,
                 week_52_low: 1_800_000,
+                // In Angel One SnapQuote, flag=0 entries (best_5_buy) are the ASK side
+                // (lowest prices sellers will accept), and flag=1 entries (best_5_sell)
+                // are the BID side (highest prices buyers will pay).
+                // Fixture: bid=23500.00, ask=23501.00 (uncrossed, bid < ask).
                 best_5_buy: vec![
-                    DepthEntry { flag: 0, qty: 100, price: 2_350_000, num_orders: 5 },
-                    DepthEntry { flag: 0, qty: 200, price: 2_349_950, num_orders: 8 },
-                    DepthEntry { flag: 0, qty: 150, price: 2_349_900, num_orders: 3 },
+                    DepthEntry { flag: 0, qty: 120, price: 2_350_100, num_orders: 4 }, // ask level 1
+                    DepthEntry { flag: 0, qty: 250, price: 2_350_150, num_orders: 7 }, // ask level 2
                 ],
                 best_5_sell: vec![
-                    DepthEntry { flag: 1, qty: 120, price: 2_350_100, num_orders: 4 },
-                    DepthEntry { flag: 1, qty: 250, price: 2_350_150, num_orders: 7 },
+                    DepthEntry { flag: 1, qty: 100, price: 2_350_000, num_orders: 5 }, // bid level 1
+                    DepthEntry { flag: 1, qty: 200, price: 2_349_950, num_orders: 8 }, // bid level 2
+                    DepthEntry { flag: 1, qty: 150, price: 2_349_900, num_orders: 3 }, // bid level 3
                 ],
             }),
         }
@@ -280,11 +291,11 @@ mod tests {
             .expect("decode ok")
             .expect("tick present");
 
-        // bid = best_5_buy[0].price = 2_350_000 paise, precision 2 Ã¢â€ â€™ Ã¢â€šÂ¹23500.00
+        // bid = best_5_sell[0].price = 2_350_000 paise → ₹23500.00
         assert_eq!(tick.bid_price.raw, 2_350_000);
         assert_eq!(tick.bid_price.precision, 2);
 
-        // ask = best_5_sell[0].price = 2_350_100 paise Ã¢â€ â€™ Ã¢â€šÂ¹23501.00
+        // ask = best_5_buy[0].price = 2_350_100 paise → ₹23501.00
         assert_eq!(tick.ask_price.raw, 2_350_100);
 
         assert_eq!(tick.bid_size.raw, 100);
