@@ -39,7 +39,8 @@ use zeromq::{Socket, SocketRecv, SubSocket};
 const ZMQ_ENDPOINT: &str = "tcp://127.0.0.1:5555";
 
 /// Maximum time between heartbeats before triggering the kill switch.
-const HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(50);
+/// Increased to 1000ms (1 second) to account for Windows OS thread scheduling jitter.
+const HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(1000);
 
 /// Check interval for the heartbeat watchdog.
 const WATCHDOG_INTERVAL: Duration = Duration::from_millis(10);

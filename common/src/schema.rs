@@ -99,6 +99,18 @@ pub struct Tick {
 
     /// Exchange sequence number for gap detection.
     pub seq_no: i64,
+
+    /// Best Bid Price (Top of Book L1)
+    pub best_bid_price: f64,
+
+    /// Best Bid Quantity
+    pub best_bid_qty: i64,
+
+    /// Best Ask Price (Top of Book L1)
+    pub best_ask_price: f64,
+
+    /// Best Ask Quantity
+    pub best_ask_qty: i64,
 }
 
 // ---------------------------------------------------------------------------
@@ -182,6 +194,30 @@ impl ParsedPacket {
                 .map(|q| q.last_traded_qty)
                 .unwrap_or(0),
             seq_no: self.sequence_number,
+            best_bid_price: self
+                .snap
+                .as_ref()
+                .and_then(|s| s.best_5_buy.first())
+                .map(|d| d.price as f64 / 100.0)
+                .unwrap_or(0.0),
+            best_bid_qty: self
+                .snap
+                .as_ref()
+                .and_then(|s| s.best_5_buy.first())
+                .map(|d| d.qty)
+                .unwrap_or(0),
+            best_ask_price: self
+                .snap
+                .as_ref()
+                .and_then(|s| s.best_5_sell.first())
+                .map(|d| d.price as f64 / 100.0)
+                .unwrap_or(0.0),
+            best_ask_qty: self
+                .snap
+                .as_ref()
+                .and_then(|s| s.best_5_sell.first())
+                .map(|d| d.qty)
+                .unwrap_or(0),
         }
     }
 }
