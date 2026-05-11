@@ -51,6 +51,10 @@ impl ParquetSink {
             Field::new("price", DataType::Float64, false),
             Field::new("qty", DataType::Int64, false),
             Field::new("seq_no", DataType::Int64, false),
+            Field::new("best_bid_price", DataType::Float64, false),
+            Field::new("best_bid_qty", DataType::Int64, false),
+            Field::new("best_ask_price", DataType::Float64, false),
+            Field::new("best_ask_qty", DataType::Int64, false),
         ]));
 
         Self {
@@ -142,6 +146,10 @@ impl ParquetSink {
         let price: Vec<f64> = ticks.iter().map(|t| t.price).collect();
         let qty: Vec<i64> = ticks.iter().map(|t| t.qty).collect();
         let seq_no: Vec<i64> = ticks.iter().map(|t| t.seq_no).collect();
+        let best_bid_price: Vec<f64> = ticks.iter().map(|t| t.best_bid_price).collect();
+        let best_bid_qty: Vec<i64> = ticks.iter().map(|t| t.best_bid_qty).collect();
+        let best_ask_price: Vec<f64> = ticks.iter().map(|t| t.best_ask_price).collect();
+        let best_ask_qty: Vec<i64> = ticks.iter().map(|t| t.best_ask_qty).collect();
 
         let batch = RecordBatch::try_new(
             self.schema.clone(),
@@ -152,6 +160,10 @@ impl ParquetSink {
                 Arc::new(Float64Array::from(price)),
                 Arc::new(Int64Array::from(qty)),
                 Arc::new(Int64Array::from(seq_no)),
+                Arc::new(Float64Array::from(best_bid_price)),
+                Arc::new(Int64Array::from(best_bid_qty)),
+                Arc::new(Float64Array::from(best_ask_price)),
+                Arc::new(Int64Array::from(best_ask_qty)),
             ],
         )?;
 
@@ -195,6 +207,10 @@ mod tests {
             price,
             qty: 100,
             seq_no: seq,
+            best_bid_price: price - 0.05,
+            best_bid_qty: 100,
+            best_ask_price: price + 0.05,
+            best_ask_qty: 100,
         }
     }
 

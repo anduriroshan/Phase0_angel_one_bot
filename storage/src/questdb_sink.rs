@@ -51,6 +51,10 @@ impl QuestDbSink {
             .column_f64("price", tick.price)?
             .column_i64("qty", tick.qty)?
             .column_i64("seq_no", tick.seq_no)?
+            .column_f64("best_bid_price", tick.best_bid_price)?
+            .column_i64("best_bid_qty", tick.best_bid_qty)?
+            .column_f64("best_ask_price", tick.best_ask_price)?
+            .column_i64("best_ask_qty", tick.best_ask_qty)?
             .at(TimestampNanos::new(tick.ts_ns))?;
 
         self.buffered += 1;
