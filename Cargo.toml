@@ -9,6 +9,7 @@ members = [
     "strategy_basis_arb",
     "strategy_intraday_vwap",
     "trading",
+    "backtest",
 ]
 resolver = "2"
 
