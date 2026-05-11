@@ -42,7 +42,15 @@ struct LoginResponse {
 const LOGIN_URL: &str =
     "https://apiconnect.angelone.in/rest/auth/angelbroking/user/v1/loginByPassword";
 
+use tokio::sync::OnceCell;
+
+static AUTH_CACHE: OnceCell<AuthTokens> = OnceCell::const_new();
+
 /// Authenticate with the Angel One SmartAPI and return session tokens.
+///
+/// If multiple components (e.g. DataClient and ExecutionClient) call this
+/// concurrently, it guarantees that only ONE actual network request is made
+/// to Angel One. The result is cached globally for the process lifetime.
 ///
 /// Reads the following environment variables:
 /// - `ANGEL_CLIENT_ID`
@@ -50,74 +58,81 @@ const LOGIN_URL: &str =
 /// - `ANGEL_API_KEY`
 /// - `ANGEL_TOTP_SECRET`
 pub async fn authenticate() -> anyhow::Result<AuthTokens> {
-    let client_id = std::env::var("ANGEL_CLIENT_ID")
-        .map_err(|_| anyhow::anyhow!("ANGEL_CLIENT_ID not set"))?;
-    let pin = std::env::var("ANGEL_PIN")
-        .map_err(|_| anyhow::anyhow!("ANGEL_PIN not set"))?;
-    let api_key = std::env::var("ANGEL_API_KEY")
-        .map_err(|_| anyhow::anyhow!("ANGEL_API_KEY not set"))?;
-    let totp_secret_str = std::env::var("ANGEL_TOTP_SECRET")
-        .map_err(|_| anyhow::anyhow!("ANGEL_TOTP_SECRET not set"))?;
+    let tokens = AUTH_CACHE
+        .get_or_try_init(|| async {
+            let client_id = std::env::var("ANGEL_CLIENT_ID")
+                .map_err(|_| anyhow::anyhow!("ANGEL_CLIENT_ID not set"))?;
+            let pin = std::env::var("ANGEL_PIN")
+                .map_err(|_| anyhow::anyhow!("ANGEL_PIN not set"))?;
+            let api_key = std::env::var("ANGEL_API_KEY")
+                .map_err(|_| anyhow::anyhow!("ANGEL_API_KEY not set"))?;
+            let totp_secret_str = std::env::var("ANGEL_TOTP_SECRET")
+                .map_err(|_| anyhow::anyhow!("ANGEL_TOTP_SECRET not set"))?;
 
-    let secret_bytes = Secret::Encoded(totp_secret_str)
-        .to_bytes()
-        .map_err(|e| anyhow::anyhow!("Failed to decode TOTP secret: {e}"))?;
+            let secret_bytes = Secret::Encoded(totp_secret_str)
+                .to_bytes()
+                .map_err(|e| anyhow::anyhow!("Failed to decode TOTP secret: {e}"))?;
 
-    let totp = TOTP::new(Algorithm::SHA1, 6, 1, 30, secret_bytes)
-        .map_err(|e| anyhow::anyhow!("Failed to create TOTP: {e}"))?;
+            let totp = TOTP::new(Algorithm::SHA1, 6, 1, 30, secret_bytes)
+                .map_err(|e| anyhow::anyhow!("Failed to create TOTP: {e}"))?;
 
-    let totp_code = totp
-        .generate_current()
-        .map_err(|e| anyhow::anyhow!("Failed to generate TOTP code: {e}"))?;
+            let totp_code = totp
+                .generate_current()
+                .map_err(|e| anyhow::anyhow!("Failed to generate TOTP code: {e}"))?;
 
-    info!("Authenticating with Angel One SmartAPI...");
+            info!("Authenticating with Angel One SmartAPI...");
 
-    let client = Client::new();
-    let payload = json!({
-        "clientcode": client_id,
-        "password": pin,
-        "totp": totp_code,
-    });
+            let client = Client::new();
+            let payload = json!({
+                "clientcode": client_id,
+                "password": pin,
+                "totp": totp_code,
+            });
 
-    let res = client
-        .post(LOGIN_URL)
-        .header("Content-Type", "application/json")
-        .header("Accept", "application/json")
-        .header("X-UserType", "USER")
-        .header("X-SourceID", "WEB")
-        .header("X-ClientLocalIP", "127.0.0.1")
-        .header("X-ClientPublicIP", "127.0.0.1")
-        .header("X-MACAddress", "00-00-00-00-00-00")
-        .header("X-PrivateKey", &api_key)
-        .json(&payload)
-        .send()
+            let res = client
+                .post(LOGIN_URL)
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .header("X-UserType", "USER")
+                .header("X-SourceID", "WEB")
+                .header("X-ClientLocalIP", "127.0.0.1")
+                .header("X-ClientPublicIP", "127.0.0.1")
+                .header("X-MACAddress", "00-00-00-00-00-00")
+                .header("X-PrivateKey", &api_key)
+                .json(&payload)
+                .send()
+                .await?;
+
+            let status = res.status();
+            let body = res.text().await?;
+
+            if !status.is_success() {
+                anyhow::bail!("Angel One login HTTP {status}: {body}");
+            }
+
+            let parsed: LoginResponse = serde_json::from_str(&body).map_err(|e| {
+                anyhow::anyhow!("Failed to parse login response: {e}\nBody: {body}")
+            })?;
+
+            if !parsed.status {
+                anyhow::bail!("Angel One login rejected: {}", parsed.message);
+            }
+
+            let data = parsed
+                .data
+                .ok_or_else(|| anyhow::anyhow!("Login succeeded but data field is null"))?;
+
+            info!("Angel One authentication successful");
+
+            Ok(AuthTokens {
+                jwt_token: data.jwt_token,
+                feed_token: data.feed_token,
+                refresh_token: data.refresh_token,
+                api_key,
+                client_id,
+            })
+        })
         .await?;
 
-    let status = res.status();
-    let body = res.text().await?;
-
-    if !status.is_success() {
-        anyhow::bail!("Angel One login HTTP {status}: {body}");
-    }
-
-    let parsed: LoginResponse = serde_json::from_str(&body)
-        .map_err(|e| anyhow::anyhow!("Failed to parse login response: {e}\nBody: {body}"))?;
-
-    if !parsed.status {
-        anyhow::bail!("Angel One login rejected: {}", parsed.message);
-    }
-
-    let data = parsed
-        .data
-        .ok_or_else(|| anyhow::anyhow!("Login succeeded but data field is null"))?;
-
-    info!("Angel One authentication successful");
-
-    Ok(AuthTokens {
-        jwt_token: data.jwt_token,
-        feed_token: data.feed_token,
-        refresh_token: data.refresh_token,
-        api_key,
-        client_id,
-    })
+    Ok(tokens.clone())
 }
