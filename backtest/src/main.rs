@@ -114,6 +114,17 @@ fn load_parquet(path: &PathBuf, instrument_id: InstrumentId) -> Result<Vec<Data>
     let mut reader = builder.build()?;
     let mut data = Vec::new();
 
+    // Angel One sends alternating single-sided depth packets: some ticks have
+    // only bid data (ask=0), others only ask data (bid=0). Forward-fill the
+    // last known non-zero value for each side so every QuoteTick is valid.
+    // When one side never appears (e.g. NIFTY index has no depth at all,
+    // SUNPHARMA may have only one-sided depth), infer it from the other side
+    // (zero spread), which is acceptable for a backtest smoke test.
+    let mut last_bid_p: f64 = 0.0;
+    let mut last_bid_q: i64 = 1;
+    let mut last_ask_p: f64 = 0.0;
+    let mut last_ask_q: i64 = 1;
+
     while let Some(batch_res) = reader.next() {
         let batch = batch_res?;
         let ts_col = batch
@@ -143,13 +154,37 @@ fn load_parquet(path: &PathBuf, instrument_id: InstrumentId) -> Result<Vec<Data>
             .context("best_ask_qty (col 9) is not Int64")?;
 
         for i in 0..batch.num_rows() {
+            let raw_bid_p = bid_p.value(i);
+            let raw_ask_p = ask_p.value(i);
+
+            // Update running last-known values when the packet has that side.
+            if raw_bid_p > 0.0 {
+                last_bid_p = raw_bid_p;
+                last_bid_q = bid_q.value(i).max(1);
+            }
+            if raw_ask_p > 0.0 {
+                last_ask_p = raw_ask_p;
+                last_ask_q = ask_q.value(i).max(1);
+            }
+
+            // Skip until at least one side has been seen.
+            if last_bid_p <= 0.0 && last_ask_p <= 0.0 {
+                continue;
+            }
+
+            // If one side has never appeared, infer from the other (zero spread).
+            let eff_bid_p = if last_bid_p > 0.0 { last_bid_p } else { last_ask_p };
+            let eff_bid_q = if last_bid_p > 0.0 { last_bid_q } else { last_ask_q };
+            let eff_ask_p = if last_ask_p > 0.0 { last_ask_p } else { last_bid_p };
+            let eff_ask_q = if last_ask_p > 0.0 { last_ask_q } else { last_bid_q };
+
             let ts = UnixNanos::from(ts_col.value(i) as u64);
             data.push(Data::Quote(QuoteTick::new(
                 instrument_id,
-                Price::new(bid_p.value(i), 2),
-                Price::new(ask_p.value(i), 2),
-                Quantity::new(bid_q.value(i) as f64, 0),
-                Quantity::new(ask_q.value(i) as f64, 0),
+                Price::new(eff_bid_p, 2),
+                Price::new(eff_ask_p, 2),
+                Quantity::new(eff_bid_q as f64, 0),
+                Quantity::new(eff_ask_q as f64, 0),
                 ts,
                 ts,
             )));
