@@ -148,15 +148,16 @@ pub fn packet_to_order_book_deltas(
     // 1. Clear delta Ã¢â‚¬â€ always first for full-snapshot feeds.
     deltas.push(OrderBookDelta::clear(instrument_id, seq, ts_event, ts_init));
 
-    // 2. Bid (buy) levels Ã¢â‚¬â€ index 0 = best bid.
+    // Bid (buy) levels: best_5_sell contains the bid side (flag=1 = highest buy prices).
+    // Ask (sell) levels: best_5_buy contains the ask side (flag=0 = lowest sell prices).
     let non_empty_bids: Vec<&DepthEntry> = snap
-        .best_5_buy
+        .best_5_sell
         .iter()
         .filter(|e| e.price > 0 && e.qty > 0)
         .collect();
 
     let non_empty_asks: Vec<&DepthEntry> = snap
-        .best_5_sell
+        .best_5_buy
         .iter()
         .filter(|e| e.price > 0 && e.qty > 0)
         .collect();
@@ -328,14 +329,16 @@ mod tests {
             .expect("decode ok")
             .expect("deltas present");
 
+        // Fixture: best_5_sell = bid side (3 entries, price 2_350_000)
+        //          best_5_buy  = ask side (2 entries, price 2_350_100)
         // 1 Clear + 3 bids + 2 asks = 6 deltas
         assert_eq!(deltas.deltas.len(), 6);
         assert_eq!(deltas.deltas[0].action, BookAction::Clear);
         assert_eq!(deltas.deltas[1].action, BookAction::Add);
         assert_eq!(deltas.deltas[1].order.side, OrderSide::Buy);
-        assert_eq!(deltas.deltas[1].order.price.raw, 2_350_000);
+        assert_eq!(deltas.deltas[1].order.price.raw, 2_350_000); // best bid
         assert_eq!(deltas.deltas[4].order.side, OrderSide::Sell);
-        assert_eq!(deltas.deltas[4].order.price.raw, 2_350_100);
+        assert_eq!(deltas.deltas[4].order.price.raw, 2_350_100); // best ask
 
         // Last delta must have F_LAST flag set.
         let last = deltas.deltas.last().unwrap();
