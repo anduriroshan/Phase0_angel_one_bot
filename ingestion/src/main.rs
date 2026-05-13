@@ -12,6 +12,7 @@ mod auth;
 mod websocket;
 
 use common::{PnlMessage, Tick};
+use storage::storage_consumer;
 use tokio::sync::{mpsc, watch};
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
@@ -116,41 +117,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     });
 
-    // Step 7: Consume ticks (storage fan-out)
-    //
-    // In the full pipeline, this calls into the `storage` crate.
-    // For now, we log received ticks and forward to storage when available.
+    // Step 7: Consume ticks — fan out to QuestDB + Parquet via storage crate.
+    // A separate mpsc channel feeds the storage consumer so logging and storage
+    // are decoupled.
+    std::fs::create_dir_all("./data/raw").ok();
+    let (storage_tx, storage_rx) = mpsc::channel::<Tick>(8192);
+    let storage_handle = tokio::spawn(storage_consumer(storage_rx));
+    info!("Storage consumer spawned — writing ticks to QuestDB + ./data/raw/");
+
     let consumer_handle = tokio::spawn(async move {
         let mut count: u64 = 0;
-        let mut last_tick: Option<Tick> = None;
 
         while let Some(tick) = rx.recv().await {
             count += 1;
-            last_tick = Some(tick.clone());
 
             // Log every 100th tick to avoid flooding stdout
             if count % 100 == 0 {
                 info!(
-                    "Tick #{count}: inst_id={} price={:.2} qty={} seq={}",
-                    tick.inst_id, tick.price, tick.qty, tick.seq_no
+                    "Tick #{count}: inst_id={} price={:.2} qty={} seq={} bid={:.2} ask={:.2}",
+                    tick.inst_id, tick.price, tick.qty, tick.seq_no,
+                    tick.best_bid_price, tick.best_ask_price
                 );
             }
 
+            // Forward to storage (QuestDB + Parquet).
+            if storage_tx.send(tick).await.is_err() {
+                warn!("Storage consumer channel closed — stopping ingestion");
+                break;
+            }
+
             // Update the shared PnL so the heartbeat task sends the latest value.
-            // TODO: Replace 0.0 with real PnL calculation.
             let _ = pnl_tx.send(0.0);
-
-            // TODO: Forward to storage::write_tick(&tick)
         }
 
-        if let Some(tick) = last_tick {
-            info!(
-                "Consumer finished. Total ticks: {count}. Last: inst_id={} price={:.2}",
-                tick.inst_id, tick.price
-            );
-        } else {
-            info!("Consumer finished with no ticks received");
-        }
+        info!("Consumer finished. Total ticks received: {count}");
+        // Dropping storage_tx here closes the storage channel, triggering final flush.
     });
 
     // Step 8: Wait for graceful shutdown
@@ -163,11 +164,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     }
 
-    // Stop the heartbeat task and give the consumer a moment to drain
+    // Stop the heartbeat task and give the consumer + storage a moment to drain
     heartbeat_handle.abort();
     let _ = tokio::time::timeout(
-        tokio::time::Duration::from_secs(2),
+        tokio::time::Duration::from_secs(5),
         consumer_handle,
+    )
+    .await;
+    // Wait for storage to flush remaining ticks to parquet/QuestDB
+    let _ = tokio::time::timeout(
+        tokio::time::Duration::from_secs(10),
+        storage_handle,
     )
     .await;
 
