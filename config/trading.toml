@@ -28,11 +28,11 @@ data_client_id = "ANGEL_ONE"
 # ---------------------------------------------------------------------------
 
 [[instruments]]
-symbol              = "NIFTY26JUNFUT"
-token               = 57515
-trading_symbol      = "NIFTY25JUNFUT"
+symbol              = "NIFTY26MAYFUT"
+token               = 66071
+trading_symbol      = "NIFTY26MAY26FUT"
 exchange            = "NFO"
-expiry_utc          = "2026-06-26T09:30:00Z"
+expiry_utc          = "2026-05-26T10:00:00Z"   # 26-May-2026 15:30 IST = 10:00 UTC
 is_physical_settlement = false
 product_type        = "CARRYFORWARD"
 

@@ -259,15 +259,19 @@ async fn main() -> Result<()> {
         if path.extension().and_then(|s| s.to_str()) != Some("parquet") {
             continue;
         }
-        // BUG FIX: parquet files are named by token integer (e.g. "1594.parquet"),
-        // not by symbol name. Parse the stem as a token and look it up in the map.
+        // Parquet files are named "{token}.parquet" (legacy) or
+        // "{token}_{flush_millis}.parquet" (current, timestamped to avoid
+        // overwriting data from previous hourly flushes).
+        // Extract the token as the part before the first '_' (or the whole stem
+        // for legacy single-flush files).
         let stem = path
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or_default();
-        let token: u32 = stem
+        let token_str = stem.split('_').next().unwrap_or(stem);
+        let token: u32 = token_str
             .parse()
-            .with_context(|| format!("Parquet filename is not a token integer: {stem}"))?;
+            .with_context(|| format!("Parquet filename token part is not an integer: {stem}"))?;
         let instrument_id = match token_map.get(&token) {
             Some(&id) => id,
             None => {
