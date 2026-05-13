@@ -4,9 +4,12 @@
 //! to instrument tokens, parses the binary stream into [`common::Tick`] structs,
 //! and pushes them into a `tokio::sync::mpsc` channel for downstream consumption.
 
+use std::collections::HashMap;
+
 use crate::auth::AuthTokens;
 use common::{parse_binary_packet, Tick};
 use futures_util::{SinkExt, StreamExt};
+use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::mpsc;
 use tokio::time::{self, Duration};
@@ -19,49 +22,82 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
 const MAX_RECONNECT_ATTEMPTS: u32 = 5;
 const RECONNECT_BASE_DELAY: Duration = Duration::from_secs(2);
 
+/// One exchange bucket: all tokens sharing the same exchange_type.
+#[derive(Debug, Clone)]
+pub struct TokenBucket {
+    /// Angel One exchange_type (1=NSE_CM, 2=NSE_FO).
+    pub exchange_type: u8,
+    /// Angel One token strings for this exchange.
+    pub tokens: Vec<String>,
+}
+
 /// Configuration for which instruments to subscribe to.
 #[derive(Debug, Clone)]
 pub struct SubscriptionConfig {
-    /// Angel One instrument token strings (e.g. "26009").
-    pub tokens: Vec<String>,
-    /// Exchange type (2 = NSE_FO).
-    pub exchange_type: u8,
+    /// Tokens grouped by exchange type — each bucket becomes one tokenList entry.
+    pub buckets: Vec<TokenBucket>,
     /// Subscription mode (1=LTP, 2=Quote, 3=SnapQuote).
     pub mode: u8,
 }
 
-impl Default for SubscriptionConfig {
-    fn default() -> Self {
-        Self {
-            tokens: vec!["26009".to_string(), "26000".to_string()],
-            // NSE Cash Market (CM) = 1.  NIFTY 50 (26009) and NIFTY BANK (26000)
-            // are index instruments traded on NSE CM, NOT NSE F&O (2).
-            // Using the wrong exchange_type causes the server to silently
-            // accept the subscription but send zero data.
-            exchange_type: 1, // NSE_CM
-            mode: 3,          // SnapQuote
-        }
-    }
+// Minimal serde structs to read config/trading.toml
+#[derive(Debug, Deserialize)]
+struct TomlConfig {
+    instruments: Vec<TomlInstrument>,
 }
 
-/// Load subscription config from environment variables, falling back to defaults.
+#[derive(Debug, Deserialize)]
+struct TomlInstrument {
+    token: u32,
+    exchange: String,
+}
+
+/// Load subscription config from `config/trading.toml`.
+/// Falls back to NIFTY 50 only if the file cannot be read.
 pub fn load_subscription_config() -> SubscriptionConfig {
-    let tokens = std::env::var("SUBSCRIBE_TOKENS")
-        .map(|s| s.split(',').map(|t| t.trim().to_string()).collect())
-        .unwrap_or_else(|_| vec!["26009".to_string(), "26000".to_string()]);
+    let config_text = match std::fs::read_to_string("config/trading.toml") {
+        Ok(s) => s,
+        Err(e) => {
+            warn!("Cannot read config/trading.toml: {e}. Falling back to NIFTY 50 only.");
+            return SubscriptionConfig {
+                buckets: vec![TokenBucket { exchange_type: 1, tokens: vec!["26009".to_string()] }],
+                mode: 3,
+            };
+        }
+    };
 
-    let exchange_type = std::env::var("SUBSCRIBE_EXCHANGE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        // Default: NSE CM (1).  NIFTY 50 (26009) / NIFTY BANK (26000) are CM tokens.
-        // Override with SUBSCRIBE_EXCHANGE=2 for F&O instruments.
-        .unwrap_or(1u8);
+    let cfg: TomlConfig = match toml::from_str(&config_text) {
+        Ok(c) => c,
+        Err(e) => {
+            warn!("Cannot parse config/trading.toml: {e}. Falling back to NIFTY 50 only.");
+            return SubscriptionConfig {
+                buckets: vec![TokenBucket { exchange_type: 1, tokens: vec!["26009".to_string()] }],
+                mode: 3,
+            };
+        }
+    };
 
-    SubscriptionConfig {
-        tokens,
-        exchange_type,
-        mode: 3, // SnapQuote for maximum data
+    // Group tokens by exchange_type: NFO=2, everything else (NSE/BSE equities)=1.
+    let mut groups: HashMap<u8, Vec<String>> = HashMap::new();
+    for inst in &cfg.instruments {
+        let exchange_type: u8 = if inst.exchange == "NFO" { 2 } else { 1 };
+        groups
+            .entry(exchange_type)
+            .or_default()
+            .push(inst.token.to_string());
     }
+
+    let buckets: Vec<TokenBucket> = groups
+        .into_iter()
+        .map(|(exchange_type, tokens)| {
+            info!("Subscribing {} tokens on exchange_type={exchange_type}: {:?}", tokens.len(), tokens);
+            TokenBucket { exchange_type, tokens }
+        })
+        .collect();
+
+    info!("Loaded {} instrument(s) from config/trading.toml", cfg.instruments.len());
+
+    SubscriptionConfig { buckets, mode: 3 }
 }
 
 /// Connect to the Angel One WebSocket and stream ticks into the provided channel.
@@ -126,26 +162,24 @@ async fn run_stream(
 
     let (mut sink, mut stream) = ws_stream.split();
 
-    // Send subscription request
+    // Send subscription request — one tokenList entry per exchange bucket.
+    let token_list: Vec<serde_json::Value> = config.buckets.iter().map(|b| {
+        json!({ "exchangeType": b.exchange_type, "tokens": b.tokens })
+    }).collect();
+    let total_tokens: usize = config.buckets.iter().map(|b| b.tokens.len()).sum();
+
     let subscribe_msg = json!({
         "correlationID": "phase0_sub",
         "action": 1,
         "params": {
             "mode": config.mode,
-            "tokenList": [{
-                "exchangeType": config.exchange_type,
-                "tokens": config.tokens
-            }]
+            "tokenList": token_list
         }
     });
 
     sink.send(Message::Text(subscribe_msg.to_string())).await?;
-    info!(
-        "Subscribed to {} tokens on exchange {} in mode {}",
-        config.tokens.len(),
-        config.exchange_type,
-        config.mode
-    );
+    info!("Subscribed to {total_tokens} tokens across {} exchange buckets in mode {}",
+        config.buckets.len(), config.mode);
 
     // Spawn heartbeat task
     let heartbeat_sink = tx.clone(); // just to keep the task alive
