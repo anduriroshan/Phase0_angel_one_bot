@@ -116,7 +116,10 @@ impl ParquetSink {
             let dir = date_dir.clone();
             fs::create_dir_all(&dir)?;
 
-            let filename = format!("{inst_id}.parquet");
+            // Include the flush timestamp in the filename so successive
+            // flushes produce separate files instead of overwriting each other.
+            // e.g. 1594_1778668109000.parquet
+            let filename = format!("{}_{}.parquet", inst_id, now.timestamp_millis());
             let path = dir.join(&filename);
 
             self.write_parquet(&path, &ticks)?;

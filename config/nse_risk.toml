@@ -27,7 +27,7 @@ physical_settlement_reject_minutes_before_expiry = 90
 # Key must match the NautilusTrader symbol string exactly.
 # lot_size and freeze_qty must be verified against Angel One instrument master.
 
-[instruments.NIFTY26JUNFUT]
+[instruments.NIFTY26MAYFUT]
 # reason: NIFTY lot size = 75 (post Apr-2024 revision from 50)
 # Verify: nseindia.com/products-services/equity-derivatives-trading-info
 lot_size = 75

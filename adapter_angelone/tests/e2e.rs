@@ -39,14 +39,14 @@ fn inr() -> Currency {
 ///
 /// Lot size: 75, tick size: ₹0.05, denomination: INR.
 fn nifty_jun26_futures() -> FuturesContract {
-    // activation 2026-05-01, expiry 2026-06-26 (last Thursday)
+    // activation 2026-05-01, expiry 2026-05-26 (last Thursday of May)
     let activation = UnixNanos::from(1_746_057_600_000_000_000_u64); // 2026-05-01 00:00 UTC
-    let expiration = UnixNanos::from(1_751_001_600_000_000_000_u64); // 2026-06-26 00:00 UTC
+    let expiration = UnixNanos::from(1_748_304_000_000_000_000_u64); // 2026-05-26 10:00 UTC
 
     let venue = Venue::new("NSE");
     FuturesContract::new(
-        InstrumentId::new(Symbol::new("NIFTY26JUNFUT"), venue),
-        Symbol::new("NIFTY26JUNFUT"),
+        InstrumentId::new(Symbol::new("NIFTY26MAYFUT"), venue),
+        Symbol::new("NIFTY26MAYFUT"),
         AssetClass::Index,
         Some(Ustr::from("XNSE")),
         Ustr::from("NIFTY"),
