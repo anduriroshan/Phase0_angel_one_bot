@@ -48,6 +48,20 @@ pub async fn storage_consumer(mut rx: mpsc::Receiver<Tick>) {
                     Some(tick) => {
                         count += 1;
 
+                        // Drop pre-market circuit-limit packets.
+                        // At market open Angel One sends the upper/lower circuit
+                        // limits in the depth fields rather than real order book
+                        // prices, producing a wildly crossed quote (e.g. bid=1235,
+                        // ask=1010 for a ₹1100 stock). Discard any tick where the
+                        // bid-ask gap exceeds 5% of the ask price.
+                        if tick.best_ask_price > 0.0 {
+                            let spread_pct = (tick.best_bid_price - tick.best_ask_price).abs()
+                                / tick.best_ask_price;
+                            if spread_pct > 0.05 {
+                                continue;
+                            }
+                        }
+
                         // Hot sink: QuestDB
                         if let Some(ref mut qdb) = questdb {
                             if let Err(e) = qdb.write_tick(&tick) {
