@@ -60,7 +60,7 @@ pub fn load_subscription_config() -> SubscriptionConfig {
         Err(e) => {
             warn!("Cannot read config/trading.toml: {e}. Falling back to NIFTY 50 only.");
             return SubscriptionConfig {
-                buckets: vec![TokenBucket { exchange_type: 1, tokens: vec!["26009".to_string()] }],
+                buckets: vec![TokenBucket { exchange_type: 1, tokens: vec!["26000".to_string()] }],
                 mode: 3,
             };
         }
@@ -71,7 +71,7 @@ pub fn load_subscription_config() -> SubscriptionConfig {
         Err(e) => {
             warn!("Cannot parse config/trading.toml: {e}. Falling back to NIFTY 50 only.");
             return SubscriptionConfig {
-                buckets: vec![TokenBucket { exchange_type: 1, tokens: vec!["26009".to_string()] }],
+                buckets: vec![TokenBucket { exchange_type: 1, tokens: vec!["26000".to_string()] }],
                 mode: 3,
             };
         }

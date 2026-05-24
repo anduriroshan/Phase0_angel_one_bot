@@ -23,6 +23,6 @@ min_samples = 30
 futures_instrument_id = "NIFTY26MAYFUT.NSE"
 spot_instrument_id    = "NIFTY.NSE"
 
-# Order quantity in units (not lots). 75 = 1 NIFTY lot (post Apr-2024 revision).
+# Order quantity in units (not lots). 65 = 1 NIFTY lot (current lot size per ScripMaster).
 # reason: minimum tradable size; risk_nse enforces lot-size alignment.
-trade_qty_units = 75
+trade_qty_units = 65
