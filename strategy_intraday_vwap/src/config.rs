@@ -6,6 +6,10 @@ use nautilus_model::identifiers::{InstrumentId, StrategyId, Symbol, Venue};
 use nautilus_trading::strategy::StrategyConfig;
 use serde::{Deserialize, Serialize};
 
+fn default_stop_loss_pct() -> f64 {
+    0.5
+}
+
 /// Tunable parameters per-run, loaded from TOML.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntradayVwapParams {
@@ -53,6 +57,12 @@ pub struct IntradayVwapParams {
     /// Default: 45.
     pub exit_minute_ist: u32,
 
+    /// Maximum loss per position as a percentage of entry price (e.g. 0.5 = 0.5%).
+    /// If the position loses more than this %, it is force-closed immediately.
+    /// Default: 0.5 (0.5% — for a ₹1100 stock this is ~₹5.50/share).
+    #[serde(default = "default_stop_loss_pct")]
+    pub stop_loss_pct: f64,
+
     /// List of instrument symbols to trade (e.g. `["INFY", "HCLTECH"]`).
     /// Venue is set separately in `IntradayVwapConfig`.
     pub symbols: Vec<String>,
@@ -74,6 +84,7 @@ impl Default for IntradayVwapParams {
             max_qty_per_stock: 200,
             exit_hour_ist: 14,
             exit_minute_ist: 45,
+            stop_loss_pct: 0.5,
             symbols: vec![
                 "INFY".to_string(),
                 "HCLTECH".to_string(),

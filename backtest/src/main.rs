@@ -132,6 +132,11 @@ fn load_parquet(path: &PathBuf, instrument_id: InstrumentId) -> Result<Vec<Data>
             .as_any()
             .downcast_ref::<Int64Array>()
             .context("ts_ns (col 0) is not Int64")?;
+        let ltp_col = batch
+            .column(3)
+            .as_any()
+            .downcast_ref::<Float64Array>()
+            .context("price (col 3) is not Float64")?;
         let bid_p = batch
             .column(6)
             .as_any()
@@ -156,6 +161,7 @@ fn load_parquet(path: &PathBuf, instrument_id: InstrumentId) -> Result<Vec<Data>
         for i in 0..batch.num_rows() {
             let raw_bid_p = bid_p.value(i);
             let raw_ask_p = ask_p.value(i);
+            let ltp = ltp_col.value(i);
 
             // Update running last-known values when the packet has that side.
             if raw_bid_p > 0.0 {
@@ -167,16 +173,30 @@ fn load_parquet(path: &PathBuf, instrument_id: InstrumentId) -> Result<Vec<Data>
                 last_ask_q = ask_q.value(i).max(1);
             }
 
-            // Skip until at least one side has been seen.
-            if last_bid_p <= 0.0 && last_ask_p <= 0.0 {
+            // Skip until at least one side has been seen (or we have an LTP).
+            if last_bid_p <= 0.0 && last_ask_p <= 0.0 && ltp <= 0.0 {
                 continue;
             }
 
             // If one side has never appeared, infer from the other (zero spread).
-            let eff_bid_p = if last_bid_p > 0.0 { last_bid_p } else { last_ask_p };
+            // For index instruments (e.g. NIFTY spot) where bid/ask are always 0,
+            // use the LTP as both bid and ask — the strategy sees mid = LTP.
+            let eff_bid_p = if last_bid_p > 0.0 { last_bid_p } else if last_ask_p > 0.0 { last_ask_p } else { ltp };
             let eff_bid_q = if last_bid_p > 0.0 { last_bid_q } else { last_ask_q };
-            let eff_ask_p = if last_ask_p > 0.0 { last_ask_p } else { last_bid_p };
+            let eff_ask_p = if last_ask_p > 0.0 { last_ask_p } else if last_bid_p > 0.0 { last_bid_p } else { ltp };
             let eff_ask_q = if last_ask_p > 0.0 { last_ask_q } else { last_bid_q };
+
+            // Skip crossed quotes (bid > ask) — pre-market garbage data.
+            // Also skip quotes with spread > 1% (same filter as storage layer).
+            if eff_bid_p > 0.0 && eff_ask_p > 0.0 {
+                if eff_bid_p > eff_ask_p {
+                    continue;
+                }
+                let spread_pct = (eff_ask_p - eff_bid_p) / eff_ask_p;
+                if spread_pct > 0.01 {
+                    continue;
+                }
+            }
 
             let ts = UnixNanos::from(ts_col.value(i) as u64);
             data.push(Data::Quote(QuoteTick::new(

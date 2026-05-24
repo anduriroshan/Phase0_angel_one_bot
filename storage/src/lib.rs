@@ -53,11 +53,12 @@ pub async fn storage_consumer(mut rx: mpsc::Receiver<Tick>) {
                         // limits in the depth fields rather than real order book
                         // prices, producing a wildly crossed quote (e.g. bid=1235,
                         // ask=1010 for a ₹1100 stock). Discard any tick where the
-                        // bid-ask gap exceeds 5% of the ask price.
-                        if tick.best_ask_price > 0.0 {
+                        // bid-ask gap exceeds 1% of the ask price.
+                        // Normal spreads: 0.001%-0.17%; circuit limits: 1.8%-5%+.
+                        if tick.best_bid_price > 0.0 && tick.best_ask_price > 0.0 {
                             let spread_pct = (tick.best_bid_price - tick.best_ask_price).abs()
                                 / tick.best_ask_price;
-                            if spread_pct > 0.05 {
+                            if spread_pct > 0.01 {
                                 continue;
                             }
                         }
