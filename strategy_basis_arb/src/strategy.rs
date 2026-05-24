@@ -71,9 +71,24 @@ impl BasisArbStrategy {
         }
     }
 
-    /// Computes `(bid + ask) / 2` from a quote tick as a float (paise).
+    /// Computes mid-price from a quote tick.
+    /// For index instruments (NIFTY spot) where bid/ask are zero, falls back
+    /// to the last-traded-price stored in `bid_price` (NautilusTrader maps the
+    /// LTP into the quote when both sides are zero).
     fn mid(quote: &QuoteTick) -> f64 {
-        (quote.bid_price.as_f64() + quote.ask_price.as_f64()) / 2.0
+        let bid = quote.bid_price.as_f64();
+        let ask = quote.ask_price.as_f64();
+        if bid > 0.0 && ask > 0.0 {
+            (bid + ask) / 2.0
+        } else if bid > 0.0 {
+            bid
+        } else if ask > 0.0 {
+            ask
+        } else {
+            // Both zero — should not happen for tradeable instruments,
+            // but return 0.0 so callers can skip this tick.
+            0.0
+        }
     }
 
     /// Attempts to compute the current basis and emit a signal if the
@@ -85,6 +100,17 @@ impl BasisArbStrategy {
             (Some(f), Some(s)) => (f, s),
             _ => return Ok(()), // need both prices
         };
+
+        // Sanity check: futures and spot must be in the same ballpark.
+        // NIFTY futures trade near spot (typical premium < 2%).
+        // If they differ by > 5%, one side has stale/garbage data — skip.
+        let ratio = fut / spot;
+        if ratio < 0.95 || ratio > 1.05 {
+            debug!(
+                "BASIS_ARB: skipping tick — price mismatch fut={fut:.2} spot={spot:.2} ratio={ratio:.4}"
+            );
+            return Ok(());
+        }
 
         let basis = fut - spot;
         self.basis_window.push(basis);
@@ -220,6 +246,11 @@ impl DataActor for BasisArbStrategy {
 
     fn on_quote(&mut self, quote: &QuoteTick) -> anyhow::Result<()> {
         let mid = Self::mid(quote);
+
+        // Skip ticks with no valid price data.
+        if mid == 0.0 {
+            return Ok(());
+        }
 
         if quote.instrument_id == self.config.futures_id {
             self.futures_mid = Some(mid);

@@ -39,6 +39,11 @@ max_qty_per_stock = 200
 exit_hour_ist   = 14
 exit_minute_ist = 45
 
+# Stop-loss: close position if unrealized loss exceeds this % of entry price.
+# 0.5 = 0.5% (~₹5.50 for a ₹1100 stock, ₹7.50 for SUNPHARMA at ₹1500).
+# Prevents large trending moves from wiping multiple small wins.
+stop_loss_pct = 0.5
+
 # Stocks to trade (must be registered in config/trading.toml and config/nse_risk.toml).
 symbols = ["INFY", "HCLTECH", "SUNPHARMA"]
 venue   = "NSE"

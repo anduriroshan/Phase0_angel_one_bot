@@ -53,7 +53,14 @@ struct InstrumentState {
     side: PositionSide,
     /// Absolute quantity currently held (always positive; side gives direction).
     qty: u64,
+    /// Mid-price at entry — used for stop-loss calculation.
+    entry_price: f64,
+    /// Timestamp (ns) when last stop-loss was triggered — used for cooldown.
+    last_stop_ts: u64,
 }
+
+/// Cooldown after stop-loss: 5 minutes (300 seconds) before allowing re-entry.
+const STOP_LOSS_COOLDOWN_NS: u64 = 300_000_000_000;
 
 impl InstrumentState {
     fn new(window_size: usize) -> Self {
@@ -61,6 +68,8 @@ impl InstrumentState {
             vwap: SessionVwap::new(window_size),
             side: PositionSide::Flat,
             qty: 0,
+            entry_price: 0.0,
+            last_stop_ts: 0,
         }
     }
 }
@@ -165,6 +174,18 @@ impl IntradayVwapStrategy {
             return Action::Nothing;
         }
 
+        // Stop-loss: close if position has moved against us by more than stop_loss_pct.
+        if state.side != PositionSide::Flat && state.entry_price > 0.0 {
+            let pnl_pct = match state.side {
+                PositionSide::Long  => (mid - state.entry_price) / state.entry_price * 100.0,
+                PositionSide::Short => (state.entry_price - mid) / state.entry_price * 100.0,
+                PositionSide::Flat  => 0.0,
+            };
+            if pnl_pct <= -p.stop_loss_pct {
+                return Action::ClosePosition { current_side: state.side, qty: state.qty, reason: "stop_loss" };
+            }
+        }
+
         let exit_z = p.exit_z_threshold;
         if state.side == PositionSide::Long && z >= -exit_z {
             return Action::ClosePosition { current_side: state.side, qty: state.qty, reason: "z_reversion" };
@@ -174,6 +195,10 @@ impl IntradayVwapStrategy {
         }
 
         if state.side == PositionSide::Flat && z.abs() >= p.z_score_threshold {
+            // Cooldown: don't re-enter immediately after a stop-loss.
+            if state.last_stop_ts > 0 && ts_ns < state.last_stop_ts + STOP_LOSS_COOLDOWN_NS {
+                return Action::Nothing;
+            }
             let (order_side, new_side) = if z < 0.0 {
                 (OrderSide::Buy, PositionSide::Long)
             } else {
@@ -211,6 +236,7 @@ impl IntradayVwapStrategy {
         if let Some(state) = self.states.get_mut(&id) {
             state.side = PositionSide::Flat;
             state.qty = 0;
+            state.entry_price = 0.0;
         }
         Ok(())
     }
@@ -244,6 +270,7 @@ impl IntradayVwapStrategy {
         if let Some(state) = self.states.get_mut(&id) {
             state.side = new_side;
             state.qty = qty;
+            state.entry_price = mid;
         }
         Ok(())
     }
@@ -315,6 +342,11 @@ impl DataActor for IntradayVwapStrategy {
             Action::Nothing => {}
             Action::ClosePosition { current_side, qty, reason } => {
                 self.execute_close(id, current_side, qty, reason)?;
+                if reason == "stop_loss" {
+                    if let Some(state) = self.states.get_mut(&id) {
+                        state.last_stop_ts = ts_ns;
+                    }
+                }
             }
             Action::EntryOrder { order_side, qty, mid, z, session_mean, rolling_std, new_side } => {
                 if qty == 0 {
