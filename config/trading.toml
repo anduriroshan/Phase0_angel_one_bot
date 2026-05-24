@@ -38,7 +38,7 @@ product_type        = "CARRYFORWARD"
 
 [[instruments]]
 symbol              = "NIFTY"
-token               = 26009
+token               = 26000
 trading_symbol      = "NIFTY50"
 exchange            = "NSE"
 product_type        = "MIS"
