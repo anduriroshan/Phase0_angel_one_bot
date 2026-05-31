@@ -55,6 +55,25 @@ impl ParquetSink {
             Field::new("best_bid_qty", DataType::Int64, false),
             Field::new("best_ask_price", DataType::Float64, false),
             Field::new("best_ask_qty", DataType::Int64, false),
+            // L2 depth levels 2..5 — appended AFTER the L1 columns so the
+            // backtest's index-based reader and pre-existing L1 parquet files
+            // keep working unchanged.
+            Field::new("bid_price_2", DataType::Float64, false),
+            Field::new("bid_qty_2", DataType::Int64, false),
+            Field::new("bid_price_3", DataType::Float64, false),
+            Field::new("bid_qty_3", DataType::Int64, false),
+            Field::new("bid_price_4", DataType::Float64, false),
+            Field::new("bid_qty_4", DataType::Int64, false),
+            Field::new("bid_price_5", DataType::Float64, false),
+            Field::new("bid_qty_5", DataType::Int64, false),
+            Field::new("ask_price_2", DataType::Float64, false),
+            Field::new("ask_qty_2", DataType::Int64, false),
+            Field::new("ask_price_3", DataType::Float64, false),
+            Field::new("ask_qty_3", DataType::Int64, false),
+            Field::new("ask_price_4", DataType::Float64, false),
+            Field::new("ask_qty_4", DataType::Int64, false),
+            Field::new("ask_price_5", DataType::Float64, false),
+            Field::new("ask_qty_5", DataType::Int64, false),
         ]));
 
         Self {
@@ -154,6 +173,24 @@ impl ParquetSink {
         let best_ask_price: Vec<f64> = ticks.iter().map(|t| t.best_ask_price).collect();
         let best_ask_qty: Vec<i64> = ticks.iter().map(|t| t.best_ask_qty).collect();
 
+        // L2 depth levels 2..5.
+        let bid_price_2: Vec<f64> = ticks.iter().map(|t| t.bid_price_2).collect();
+        let bid_qty_2: Vec<i64> = ticks.iter().map(|t| t.bid_qty_2).collect();
+        let bid_price_3: Vec<f64> = ticks.iter().map(|t| t.bid_price_3).collect();
+        let bid_qty_3: Vec<i64> = ticks.iter().map(|t| t.bid_qty_3).collect();
+        let bid_price_4: Vec<f64> = ticks.iter().map(|t| t.bid_price_4).collect();
+        let bid_qty_4: Vec<i64> = ticks.iter().map(|t| t.bid_qty_4).collect();
+        let bid_price_5: Vec<f64> = ticks.iter().map(|t| t.bid_price_5).collect();
+        let bid_qty_5: Vec<i64> = ticks.iter().map(|t| t.bid_qty_5).collect();
+        let ask_price_2: Vec<f64> = ticks.iter().map(|t| t.ask_price_2).collect();
+        let ask_qty_2: Vec<i64> = ticks.iter().map(|t| t.ask_qty_2).collect();
+        let ask_price_3: Vec<f64> = ticks.iter().map(|t| t.ask_price_3).collect();
+        let ask_qty_3: Vec<i64> = ticks.iter().map(|t| t.ask_qty_3).collect();
+        let ask_price_4: Vec<f64> = ticks.iter().map(|t| t.ask_price_4).collect();
+        let ask_qty_4: Vec<i64> = ticks.iter().map(|t| t.ask_qty_4).collect();
+        let ask_price_5: Vec<f64> = ticks.iter().map(|t| t.ask_price_5).collect();
+        let ask_qty_5: Vec<i64> = ticks.iter().map(|t| t.ask_qty_5).collect();
+
         let batch = RecordBatch::try_new(
             self.schema.clone(),
             vec![
@@ -167,6 +204,22 @@ impl ParquetSink {
                 Arc::new(Int64Array::from(best_bid_qty)),
                 Arc::new(Float64Array::from(best_ask_price)),
                 Arc::new(Int64Array::from(best_ask_qty)),
+                Arc::new(Float64Array::from(bid_price_2)),
+                Arc::new(Int64Array::from(bid_qty_2)),
+                Arc::new(Float64Array::from(bid_price_3)),
+                Arc::new(Int64Array::from(bid_qty_3)),
+                Arc::new(Float64Array::from(bid_price_4)),
+                Arc::new(Int64Array::from(bid_qty_4)),
+                Arc::new(Float64Array::from(bid_price_5)),
+                Arc::new(Int64Array::from(bid_qty_5)),
+                Arc::new(Float64Array::from(ask_price_2)),
+                Arc::new(Int64Array::from(ask_qty_2)),
+                Arc::new(Float64Array::from(ask_price_3)),
+                Arc::new(Int64Array::from(ask_qty_3)),
+                Arc::new(Float64Array::from(ask_price_4)),
+                Arc::new(Int64Array::from(ask_qty_4)),
+                Arc::new(Float64Array::from(ask_price_5)),
+                Arc::new(Int64Array::from(ask_qty_5)),
             ],
         )?;
 
@@ -214,6 +267,14 @@ mod tests {
             best_bid_qty: 100,
             best_ask_price: price + 0.05,
             best_ask_qty: 100,
+            bid_price_2: 0.0, bid_qty_2: 0,
+            bid_price_3: 0.0, bid_qty_3: 0,
+            bid_price_4: 0.0, bid_qty_4: 0,
+            bid_price_5: 0.0, bid_qty_5: 0,
+            ask_price_2: 0.0, ask_qty_2: 0,
+            ask_price_3: 0.0, ask_qty_3: 0,
+            ask_price_4: 0.0, ask_qty_4: 0,
+            ask_price_5: 0.0, ask_qty_5: 0,
         }
     }
 

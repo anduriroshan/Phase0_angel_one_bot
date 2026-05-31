@@ -26,3 +26,12 @@ spot_instrument_id    = "NIFTY.NSE"
 # Order quantity in units (not lots). 65 = 1 NIFTY lot (current lot size per ScripMaster).
 # reason: minimum tradable size; risk_nse enforces lot-size alignment.
 trade_qty_units = 65
+
+# Maximum |z-score| for which a signal is allowed (warm-up artifact guard).
+# At the open, tiny variance over few samples can produce absurd z-scores
+# (e.g. -24); those are noise, so skip any signal with |z| above this.
+max_z_score = 8.0
+
+# Minimum basis std-dev (paise) before a signal can be emitted. Below this the
+# z-score is numerically unstable and explodes on noise.
+min_std_dev = 1.0

@@ -1,0 +1,4 @@
+pair,sector_a,sector_b,same_sector,days,mean_corr,frac_coint_p05,median_p,median_beta
+INFY-HCLTECH,IT,IT,True,10,0.591,0.3,0.16,0.791
+INFY-SUNPHARMA,IT,Pharma,False,10,0.075,0.3,0.194,-0.087
+HCLTECH-SUNPHARMA,IT,Pharma,False,10,0.106,0.3,0.421,-0.062

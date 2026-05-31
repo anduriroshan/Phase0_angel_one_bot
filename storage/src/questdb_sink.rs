@@ -55,6 +55,22 @@ impl QuestDbSink {
             .column_i64("best_bid_qty", tick.best_bid_qty)?
             .column_f64("best_ask_price", tick.best_ask_price)?
             .column_i64("best_ask_qty", tick.best_ask_qty)?
+            .column_f64("bid_price_2", tick.bid_price_2)?
+            .column_i64("bid_qty_2", tick.bid_qty_2)?
+            .column_f64("bid_price_3", tick.bid_price_3)?
+            .column_i64("bid_qty_3", tick.bid_qty_3)?
+            .column_f64("bid_price_4", tick.bid_price_4)?
+            .column_i64("bid_qty_4", tick.bid_qty_4)?
+            .column_f64("bid_price_5", tick.bid_price_5)?
+            .column_i64("bid_qty_5", tick.bid_qty_5)?
+            .column_f64("ask_price_2", tick.ask_price_2)?
+            .column_i64("ask_qty_2", tick.ask_qty_2)?
+            .column_f64("ask_price_3", tick.ask_price_3)?
+            .column_i64("ask_qty_3", tick.ask_qty_3)?
+            .column_f64("ask_price_4", tick.ask_price_4)?
+            .column_i64("ask_qty_4", tick.ask_qty_4)?
+            .column_f64("ask_price_5", tick.ask_price_5)?
+            .column_i64("ask_qty_5", tick.ask_qty_5)?
             .at(TimestampNanos::new(tick.ts_ns))?;
 
         self.buffered += 1;

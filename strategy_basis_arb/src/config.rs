@@ -51,6 +51,31 @@ pub struct BasisArbParams {
     ///
     /// # reason: minimum tradable size; risk_nse enforces lot-size alignment.
     pub trade_qty_units: u64,
+
+    /// Maximum |z-score| for which a signal is allowed.  Default: 8.0.
+    /// Signals with |z| above this are skipped as warm-up / near-zero-variance
+    /// artifacts.
+    ///
+    /// # reason: at the open the rolling window has few samples and tiny
+    /// variance; a single price jump then produces an absurd z (e.g. -24) that
+    /// is noise, not signal. `#[serde(default)]` keeps older config files valid.
+    #[serde(default = "default_max_z_score")]
+    pub max_z_score: f64,
+
+    /// Minimum basis std-dev (in paise) required before a signal can be emitted.
+    /// Default: 1.0.
+    ///
+    /// # reason: std near zero makes z = (basis - mean) / std explode on noise.
+    #[serde(default = "default_min_std_dev")]
+    pub min_std_dev: f64,
+}
+
+fn default_max_z_score() -> f64 {
+    8.0
+}
+
+fn default_min_std_dev() -> f64 {
+    1.0
 }
 
 impl Default for BasisArbParams {
@@ -63,6 +88,8 @@ impl Default for BasisArbParams {
             futures_instrument_id: "NIFTY26JUNFUT.NSE".to_string(),
             spot_instrument_id: "NIFTY.NSE".to_string(),
             trade_qty_units: 75,
+            max_z_score: 8.0,
+            min_std_dev: 1.0,
         }
     }
 }

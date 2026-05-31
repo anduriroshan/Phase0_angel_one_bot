@@ -19,6 +19,7 @@ use nautilus_model::{
     instruments::{Equity, InstrumentAny},
     types::{Currency, Money, Price, Quantity},
 };
+use rust_decimal::Decimal;
 use serde::Deserialize;
 use strategy_basis_arb::BasisArbStrategy;
 
@@ -36,6 +37,11 @@ struct Args {
     /// Trading config file (used to map token integers to instrument symbols)
     #[arg(long, default_value = "config/trading.toml")]
     config: String,
+
+    /// Which strategy to run: "basis", "vwap", or "both".
+    /// Run one at a time to judge each strategy's edge in isolation.
+    #[arg(long, default_value = "both")]
+    strategy: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -54,6 +60,67 @@ struct InstrumentEntry {
     exchange: String,
 }
 
+/// Transaction-cost rates loaded from `config/costs.toml`.
+///
+/// Charged via NautilusTrader's default `MakerTakerFeeModel` as a per-side
+/// fraction of notional. See `config/costs.toml` for the rate rationale.
+#[derive(Debug, Clone, Deserialize)]
+struct CostConfig {
+    #[serde(default)]
+    #[allow(dead_code)]
+    schema_version: u32,
+    equity_maker_fee: f64,
+    equity_taker_fee: f64,
+    futures_maker_fee: f64,
+    futures_taker_fee: f64,
+}
+
+impl Default for CostConfig {
+    fn default() -> Self {
+        Self {
+            schema_version: 1,
+            equity_maker_fee: 0.00018,
+            equity_taker_fee: 0.00018,
+            futures_maker_fee: 0.00013,
+            futures_taker_fee: 0.00013,
+        }
+    }
+}
+
+impl CostConfig {
+    /// Loads from a TOML file, falling back to defaults (with a warning) on error.
+    fn load(path: &str) -> Self {
+        match std::fs::read_to_string(path) {
+            Ok(text) => match toml::from_str(&text) {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::warn!("Failed to parse {path}: {e}; using default cost model");
+                    Self::default()
+                }
+            },
+            Err(e) => {
+                tracing::warn!("Cannot read {path}: {e}; using default cost model");
+                Self::default()
+            }
+        }
+    }
+
+    /// Returns `(maker_fee, taker_fee)` for an instrument, branched by symbol.
+    /// Futures symbols (containing "FUT") get the futures rate; everything else
+    /// gets the equity rate.
+    fn fees_for(&self, symbol: &str) -> (Decimal, Decimal) {
+        let (m, t) = if symbol.contains("FUT") {
+            (self.futures_maker_fee, self.futures_taker_fee)
+        } else {
+            (self.equity_maker_fee, self.equity_taker_fee)
+        };
+        (
+            Decimal::try_from(m).unwrap_or_default(),
+            Decimal::try_from(t).unwrap_or_default(),
+        )
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -61,10 +128,26 @@ struct InstrumentEntry {
 /// Build a token → InstrumentId map from config so we can derive correct
 /// symbol names from the integer-named parquet files (e.g. 1594 → INFY.NSE).
 fn build_token_map(cfg: &TradingConfig, venue: Venue) -> std::collections::HashMap<u32, InstrumentId> {
-    cfg.instruments
+    let mut map: std::collections::HashMap<u32, InstrumentId> = cfg
+        .instruments
         .iter()
         .map(|e| (e.token, InstrumentId::new(Symbol::new(&e.symbol), venue)))
-        .collect()
+        .collect();
+
+    // Historical token aliases (see NEXT_STEPS gotcha #6): across the recorded
+    // May dataset the NIFTY futures token rolled (57515 on 2026-05-13 -> 66071
+    // afterwards) and the spot index token was corrected (26009 -> 26000 from
+    // 2026-05-24). Map the legacy tokens onto whichever NIFTY future / spot is
+    // registered in config so multi-day backtests don't silently drop early days.
+    // Only inserted if the target symbol is actually registered, and never
+    // overrides an existing token mapping.
+    for (legacy, symbol) in [(57515u32, "NIFTY26MAYFUT"), (26009u32, "NIFTY")] {
+        let id = InstrumentId::new(Symbol::new(symbol), venue);
+        if map.values().any(|v| *v == id) {
+            map.entry(legacy).or_insert(id);
+        }
+    }
+    map
 }
 
 /// Construct a minimal Equity instrument for engine registration.
@@ -72,7 +155,7 @@ fn build_token_map(cfg: &TradingConfig, venue: Venue) -> std::collections::HashM
 /// We register every instrument (including NIFTY futures) as an Equity for
 /// the smoke test — this is sufficient for L1 quote routing and P&L accounting.
 /// NSE tick size is 0.05 for both equities and NIFTY futures.
-fn make_instrument(instrument_id: InstrumentId) -> InstrumentAny {
+fn make_instrument(instrument_id: InstrumentId, maker_fee: Decimal, taker_fee: Decimal) -> InstrumentAny {
     InstrumentAny::Equity(Equity::new(
         instrument_id,
         instrument_id.symbol, // raw_symbol
@@ -87,8 +170,8 @@ fn make_instrument(instrument_id: InstrumentId) -> InstrumentAny {
         None,
         None, // margin_init
         None, // margin_maint
-        None, // maker_fee
-        None, // taker_fee
+        Some(maker_fee), // maker_fee
+        Some(taker_fee), // taker_fee
         None, // info
         UnixNanos::from(0u64),
         UnixNanos::from(0u64),
@@ -248,11 +331,17 @@ async fn main() -> Result<()> {
     // BUG FIX: register every instrument before adding data or strategies.
     // Without this the engine has no instrument definitions and cannot route
     // ticks or validate orders.
+    let cost_cfg = CostConfig::load("config/costs.toml");
+    info!(
+        "Cost model loaded: equity_taker={} futures_taker={} (per-side fraction of notional)",
+        cost_cfg.equity_taker_fee, cost_cfg.futures_taker_fee
+    );
     for entry in &cfg.instruments {
         let instrument_id = InstrumentId::new(Symbol::new(&entry.symbol), venue);
-        let instrument = make_instrument(instrument_id);
+        let (maker_fee, taker_fee) = cost_cfg.fees_for(&entry.symbol);
+        let instrument = make_instrument(instrument_id, maker_fee, taker_fee);
         engine.add_instrument(&instrument)?;
-        info!("Registered instrument: {instrument_id}");
+        info!("Registered instrument: {instrument_id} (maker_fee={maker_fee} taker_fee={taker_fee})");
     }
 
     // --- Load Parquet data ---
@@ -321,28 +410,46 @@ async fn main() -> Result<()> {
     // chronological order until sorted here.
     engine.add_data(all_data, None, true, true)?;
 
-    // --- Add strategies ---
-    let basis_params =
-        strategy_basis_arb::BasisArbParams::from_file("config/strategy_basis_arb.toml")
-            .context("Failed to load config/strategy_basis_arb.toml")?;
-    let futures_id = InstrumentId::new(
-        Symbol::new(&basis_params.futures_instrument_id.replace(".NSE", "")),
-        venue,
-    );
-    let spot_id = InstrumentId::new(
-        Symbol::new(&basis_params.spot_instrument_id.replace(".NSE", "")),
-        venue,
-    );
-    engine.add_strategy(BasisArbStrategy::new(strategy_basis_arb::BasisArbConfig::new(
-        basis_params, futures_id, spot_id,
-    )))?;
+    // --- Add strategies (selected via --strategy) ---
+    let run_basis = matches!(args.strategy.as_str(), "basis" | "both");
+    let run_vwap = matches!(args.strategy.as_str(), "vwap" | "both");
+    if !run_basis && !run_vwap {
+        anyhow::bail!(
+            "--strategy must be one of: basis, vwap, both (got '{}')",
+            args.strategy
+        );
+    }
 
-    let vwap_params =
-        strategy_intraday_vwap::IntradayVwapParams::from_file("config/strategy_intraday_vwap.toml")
-            .context("Failed to load config/strategy_intraday_vwap.toml")?;
-    engine.add_strategy(strategy_intraday_vwap::IntradayVwapStrategy::new(
-        strategy_intraday_vwap::IntradayVwapConfig::new(vwap_params),
-    ))?;
+    if run_basis {
+        let basis_params =
+            strategy_basis_arb::BasisArbParams::from_file("config/strategy_basis_arb.toml")
+                .context("Failed to load config/strategy_basis_arb.toml")?;
+        let futures_id = InstrumentId::new(
+            Symbol::new(&basis_params.futures_instrument_id.replace(".NSE", "")),
+            venue,
+        );
+        let spot_id = InstrumentId::new(
+            Symbol::new(&basis_params.spot_instrument_id.replace(".NSE", "")),
+            venue,
+        );
+        engine.add_strategy(BasisArbStrategy::new(strategy_basis_arb::BasisArbConfig::new(
+            basis_params,
+            futures_id,
+            spot_id,
+        )))?;
+        info!("Added BasisArbStrategy");
+    }
+
+    if run_vwap {
+        let vwap_params = strategy_intraday_vwap::IntradayVwapParams::from_file(
+            "config/strategy_intraday_vwap.toml",
+        )
+        .context("Failed to load config/strategy_intraday_vwap.toml")?;
+        engine.add_strategy(strategy_intraday_vwap::IntradayVwapStrategy::new(
+            strategy_intraday_vwap::IntradayVwapConfig::new(vwap_params),
+        ))?;
+        info!("Added IntradayVwapStrategy");
+    }
 
     info!("Running backtest...");
     engine.run(None, None, None, false)?;

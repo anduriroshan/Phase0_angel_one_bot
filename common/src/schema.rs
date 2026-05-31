@@ -111,6 +111,28 @@ pub struct Tick {
 
     /// Best Ask Quantity
     pub best_ask_qty: i64,
+
+    // --- Order-book depth levels 2..5 (L2) ---
+    // Populated from SnapQuote (mode 3); 0 when depth is unavailable. Bid levels
+    // come from the packet's best_5_sell, ask levels from best_5_buy (the
+    // documented Angel One flag inversion — see `to_tick`). Appended after the
+    // L1 fields so existing readers / parquet files remain valid.
+    pub bid_price_2: f64,
+    pub bid_qty_2: i64,
+    pub bid_price_3: f64,
+    pub bid_qty_3: i64,
+    pub bid_price_4: f64,
+    pub bid_qty_4: i64,
+    pub bid_price_5: f64,
+    pub bid_qty_5: i64,
+    pub ask_price_2: f64,
+    pub ask_qty_2: i64,
+    pub ask_price_3: f64,
+    pub ask_qty_3: i64,
+    pub ask_price_4: f64,
+    pub ask_qty_4: i64,
+    pub ask_price_5: f64,
+    pub ask_qty_5: i64,
 }
 
 // ---------------------------------------------------------------------------
@@ -226,6 +248,25 @@ impl ParsedPacket {
                 .and_then(|s| s.best_5_buy.first())
                 .map(|d| d.qty)
                 .unwrap_or(0),
+            // --- L2 depth levels 2..5 ---
+            // Same inversion: bid ladder = best_5_sell, ask ladder = best_5_buy.
+            // Missing levels default to 0.0 / 0.
+            bid_price_2: self.snap.as_ref().and_then(|s| s.best_5_sell.get(1)).map(|d| d.price as f64 / 100.0).unwrap_or(0.0),
+            bid_qty_2: self.snap.as_ref().and_then(|s| s.best_5_sell.get(1)).map(|d| d.qty).unwrap_or(0),
+            bid_price_3: self.snap.as_ref().and_then(|s| s.best_5_sell.get(2)).map(|d| d.price as f64 / 100.0).unwrap_or(0.0),
+            bid_qty_3: self.snap.as_ref().and_then(|s| s.best_5_sell.get(2)).map(|d| d.qty).unwrap_or(0),
+            bid_price_4: self.snap.as_ref().and_then(|s| s.best_5_sell.get(3)).map(|d| d.price as f64 / 100.0).unwrap_or(0.0),
+            bid_qty_4: self.snap.as_ref().and_then(|s| s.best_5_sell.get(3)).map(|d| d.qty).unwrap_or(0),
+            bid_price_5: self.snap.as_ref().and_then(|s| s.best_5_sell.get(4)).map(|d| d.price as f64 / 100.0).unwrap_or(0.0),
+            bid_qty_5: self.snap.as_ref().and_then(|s| s.best_5_sell.get(4)).map(|d| d.qty).unwrap_or(0),
+            ask_price_2: self.snap.as_ref().and_then(|s| s.best_5_buy.get(1)).map(|d| d.price as f64 / 100.0).unwrap_or(0.0),
+            ask_qty_2: self.snap.as_ref().and_then(|s| s.best_5_buy.get(1)).map(|d| d.qty).unwrap_or(0),
+            ask_price_3: self.snap.as_ref().and_then(|s| s.best_5_buy.get(2)).map(|d| d.price as f64 / 100.0).unwrap_or(0.0),
+            ask_qty_3: self.snap.as_ref().and_then(|s| s.best_5_buy.get(2)).map(|d| d.qty).unwrap_or(0),
+            ask_price_4: self.snap.as_ref().and_then(|s| s.best_5_buy.get(3)).map(|d| d.price as f64 / 100.0).unwrap_or(0.0),
+            ask_qty_4: self.snap.as_ref().and_then(|s| s.best_5_buy.get(3)).map(|d| d.qty).unwrap_or(0),
+            ask_price_5: self.snap.as_ref().and_then(|s| s.best_5_buy.get(4)).map(|d| d.price as f64 / 100.0).unwrap_or(0.0),
+            ask_qty_5: self.snap.as_ref().and_then(|s| s.best_5_buy.get(4)).map(|d| d.qty).unwrap_or(0),
         }
     }
 }
@@ -246,4 +287,88 @@ pub struct PnlMessage {
     /// Unix timestamp of the message.
     #[serde(default)]
     pub timestamp: i64,
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn depth(price: i64, qty: i64) -> DepthEntry {
+        DepthEntry { flag: 0, qty, price, num_orders: 1 }
+    }
+
+    fn snap(best_5_buy: Vec<DepthEntry>, best_5_sell: Vec<DepthEntry>) -> SnapQuoteData {
+        SnapQuoteData {
+            last_traded_timestamp: 0,
+            open_interest: 0,
+            oi_change_pct: 0,
+            upper_circuit: 0,
+            lower_circuit: 0,
+            week_52_high: 0,
+            week_52_low: 0,
+            best_5_buy,
+            best_5_sell,
+        }
+    }
+
+    fn packet(snap: SnapQuoteData) -> ParsedPacket {
+        ParsedPacket {
+            mode: SubscriptionMode::SnapQuote,
+            exchange: ExchangeType::NseCm,
+            token: "1594".to_string(),
+            sequence_number: 7,
+            exchange_timestamp: 1_700_000_000_000, // ms
+            last_traded_price: 9998,
+            quote: None,
+            snap: Some(snap),
+        }
+    }
+
+    #[test]
+    fn to_tick_populates_all_five_levels_with_inversion() {
+        // ASK ladder lives in best_5_buy (ascending); BID ladder in best_5_sell
+        // (descending) — the documented Angel One inversion.
+        let t = packet(snap(
+            vec![depth(10000, 1), depth(10005, 2), depth(10010, 3), depth(10015, 4), depth(10020, 5)],
+            vec![depth(9995, 10), depth(9990, 20), depth(9985, 30), depth(9980, 40), depth(9975, 50)],
+        ))
+        .to_tick();
+
+        // L1 (inverted).
+        assert_eq!(t.best_bid_price, 99.95);
+        assert_eq!(t.best_bid_qty, 10);
+        assert_eq!(t.best_ask_price, 100.00);
+        assert_eq!(t.best_ask_qty, 1);
+
+        // L2..L5 laddered correctly.
+        assert_eq!(t.bid_price_2, 99.90);
+        assert_eq!(t.bid_price_5, 99.75);
+        assert_eq!(t.bid_qty_5, 50);
+        assert_eq!(t.ask_price_2, 100.05);
+        assert_eq!(t.ask_price_5, 100.20);
+        assert_eq!(t.ask_qty_5, 5);
+
+        assert_eq!(t.inst_id, 1594);
+        assert_eq!(t.seq_no, 7);
+    }
+
+    #[test]
+    fn to_tick_zeroes_missing_levels() {
+        // 2 ask levels, 1 bid level → deeper levels must be zero.
+        let t = packet(snap(
+            vec![depth(10000, 1), depth(10005, 2)],
+            vec![depth(9995, 10)],
+        ))
+        .to_tick();
+
+        assert_eq!(t.best_ask_price, 100.00);
+        assert_eq!(t.ask_price_2, 100.05);
+        assert_eq!(t.ask_price_3, 0.0); // missing
+        assert_eq!(t.best_bid_price, 99.95);
+        assert_eq!(t.bid_price_2, 0.0); // missing
+    }
 }

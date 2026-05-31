@@ -117,6 +117,11 @@ fn test_config() -> BasisArbConfig {
         futures_instrument_id: "NIFTY26JUNFUT.NSE".to_string(),
         spot_instrument_id: "NIFTY.NSE".to_string(),
         trade_qty_units: 75,
+        // Guards effectively disabled for the existing behavioral tests so they
+        // exercise the threshold logic exactly as before. Dedicated guard tests
+        // (below) tighten these to assert suppression.
+        max_z_score: 1000.0,
+        min_std_dev: 0.0,
     };
     BasisArbConfig::new(params, futures_id(), spot_id())
 }
@@ -302,4 +307,61 @@ fn test_no_signal_within_threshold() {
     engine.run(None, None, None, false).unwrap();
 
     assert_eq!(engine.get_result().total_orders, 0, "No orders for ticks within threshold");
+}
+
+/// **Guard: absurd z-score is skipped.** Same warm-up as the breach test, then a
+/// single futures shock tick that yields z ≈ 3.0. With `max_z_score = 2.5` the
+/// signal must be suppressed (the breach test, with the guard disabled, fires).
+#[test]
+fn test_signal_suppressed_when_z_exceeds_max() {
+    let mut engine = create_engine();
+    engine.add_instrument(&InstrumentAny::FuturesContract(nifty_futures())).unwrap();
+    engine.add_instrument(&InstrumentAny::IndexInstrument(nifty_spot())).unwrap();
+
+    let mut config = test_config();
+    config.params.max_z_score = 2.5; // single shock yields z ≈ 3.0 > 2.5 → skip
+    engine.add_strategy(BasisArbStrategy::new(config)).unwrap();
+
+    let base_ns: u64 = 1_746_089_700_000_000_000;
+    let warm_up = vec![("24599.50", "24600.50"); 5];
+    let warm_spot = vec![("24499.50", "24500.50"); 5];
+    let mut ticks = build_ticks(&warm_up, &warm_spot, base_ns);
+    // Single shock futures tick (no paired spot) → exactly one post-warmup
+    // basis push, so there is no later moderated-z tick that could still fire.
+    ticks.push(quote(futures_id(), "24899.50", "24900.50", base_ns + 5 * 1_000_000_000));
+
+    engine.add_data(ticks, None, true, true).unwrap();
+    engine.run(None, None, None, false).unwrap();
+
+    assert_eq!(
+        engine.get_result().total_orders, 0,
+        "Signal with |z| above max_z_score must be suppressed"
+    );
+}
+
+/// **Guard: tiny std-dev is skipped.** Same single-shock scenario (std ≈ 90),
+/// but with `min_std_dev = 200.0` the signal must be suppressed.
+#[test]
+fn test_signal_suppressed_when_std_below_min() {
+    let mut engine = create_engine();
+    engine.add_instrument(&InstrumentAny::FuturesContract(nifty_futures())).unwrap();
+    engine.add_instrument(&InstrumentAny::IndexInstrument(nifty_spot())).unwrap();
+
+    let mut config = test_config();
+    config.params.min_std_dev = 200.0; // shock std ≈ 90 < 200 → skip
+    engine.add_strategy(BasisArbStrategy::new(config)).unwrap();
+
+    let base_ns: u64 = 1_746_089_700_000_000_000;
+    let warm_up = vec![("24599.50", "24600.50"); 5];
+    let warm_spot = vec![("24499.50", "24500.50"); 5];
+    let mut ticks = build_ticks(&warm_up, &warm_spot, base_ns);
+    ticks.push(quote(futures_id(), "24899.50", "24900.50", base_ns + 5 * 1_000_000_000));
+
+    engine.add_data(ticks, None, true, true).unwrap();
+    engine.run(None, None, None, false).unwrap();
+
+    assert_eq!(
+        engine.get_result().total_orders, 0,
+        "Signal with std_dev below min_std_dev must be suppressed"
+    );
 }
