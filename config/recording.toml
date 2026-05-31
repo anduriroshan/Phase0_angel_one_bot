@@ -1,0 +1,44 @@
+# Market-data RECORDING universe.
+#
+# This is what the Phase 0 ingestion recorder (`cargo run -p ingestion`)
+# subscribes to. It is intentionally SEPARATE from config/trading.toml (the
+# traded universe): we RECORD wide and TRADE narrow, so we can later choose
+# tradeable instruments from real recorded data.
+#
+# Regenerate the full NIFTY-50 universe with:
+#     python scripts/extract_nifty50_tokens.py
+#
+# Only `token` and `exchange` are required by the recorder; the other fields are
+# documentation and are ignored by the ingestion subscription loader.
+
+# NIFTY 50 spot index.
+[[instruments]]
+symbol         = "NIFTY"
+token          = 26000
+trading_symbol = "NIFTY50"
+exchange       = "NSE"
+
+# Active NIFTY future (token changes monthly — verify against ScripMaster).
+[[instruments]]
+symbol         = "NIFTY26MAYFUT"
+token          = 66071
+trading_symbol = "NIFTY26MAY26FUT"
+exchange       = "NFO"
+
+[[instruments]]
+symbol         = "INFY"
+token          = 1594
+trading_symbol = "INFY-EQ"
+exchange       = "NSE"
+
+[[instruments]]
+symbol         = "HCLTECH"
+token          = 7229
+trading_symbol = "HCLTECH-EQ"
+exchange       = "NSE"
+
+[[instruments]]
+symbol         = "SUNPHARMA"
+token          = 3351
+trading_symbol = "SUNPHARMA-EQ"
+exchange       = "NSE"

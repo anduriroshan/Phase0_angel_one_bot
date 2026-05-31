@@ -1,0 +1,26 @@
+# Transaction-cost model for the backtest (Angel One, zero brokerage).
+#
+# NautilusTrader's default MakerTakerFeeModel charges `notional * taker_fee`
+# on every taker fill (our market orders are takers). We model cost as a
+# symmetric PER-SIDE fraction of notional: the sum across the buy + sell legs
+# approximates the realistic ROUND-TRIP cost, which is what matters for a
+# net-of-cost go/no-go decision.
+#
+# NOTE: real STT is charged on the SELL side only. Charging half-rate on each
+# side yields the same round-trip total (correct net PnL) but approximate
+# per-leg attribution. A precise sell-side-only model would require a custom
+# FeeModel and a fork of the pinned NautilusTrader crate (ADR-007) — deferred
+# unless results land borderline.
+#
+# Rates as of 2025 — VERIFY against current NSE / SEBI circulars before trusting:
+#   Equity intraday round-trip ~0.036% of notional
+#     = STT 0.025% (sell) + exchange ~0.003% x2 + stamp 0.003% (buy) + GST + SEBI
+#   NIFTY futures round-trip   ~0.0255% of notional
+#     = STT 0.02% (sell)  + exchange ~0.0017% x2 + stamp 0.002% (buy) + GST + SEBI
+schema_version = 1
+
+# Per-side fraction of notional (round-trip cost ~= 2x these values).
+equity_maker_fee  = 0.00018
+equity_taker_fee  = 0.00018
+futures_maker_fee = 0.00013
+futures_taker_fee = 0.00013

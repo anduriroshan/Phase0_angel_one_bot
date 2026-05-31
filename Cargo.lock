@@ -700,6 +700,7 @@ dependencies = [
  "nautilus-risk",
  "parquet 54.3.1",
  "risk_nse",
+ "rust_decimal",
  "serde",
  "serde_json",
  "strategy_basis_arb",

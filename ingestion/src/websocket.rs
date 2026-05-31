@@ -40,7 +40,7 @@ pub struct SubscriptionConfig {
     pub mode: u8,
 }
 
-// Minimal serde structs to read config/trading.toml
+// Minimal serde structs to read config/recording.toml
 #[derive(Debug, Deserialize)]
 struct TomlConfig {
     instruments: Vec<TomlInstrument>,
@@ -52,13 +52,13 @@ struct TomlInstrument {
     exchange: String,
 }
 
-/// Load subscription config from `config/trading.toml`.
+/// Load subscription config from `config/recording.toml`.
 /// Falls back to NIFTY 50 only if the file cannot be read.
 pub fn load_subscription_config() -> SubscriptionConfig {
-    let config_text = match std::fs::read_to_string("config/trading.toml") {
+    let config_text = match std::fs::read_to_string("config/recording.toml") {
         Ok(s) => s,
         Err(e) => {
-            warn!("Cannot read config/trading.toml: {e}. Falling back to NIFTY 50 only.");
+            warn!("Cannot read config/recording.toml: {e}. Falling back to NIFTY 50 only.");
             return SubscriptionConfig {
                 buckets: vec![TokenBucket { exchange_type: 1, tokens: vec!["26000".to_string()] }],
                 mode: 3,
@@ -69,7 +69,7 @@ pub fn load_subscription_config() -> SubscriptionConfig {
     let cfg: TomlConfig = match toml::from_str(&config_text) {
         Ok(c) => c,
         Err(e) => {
-            warn!("Cannot parse config/trading.toml: {e}. Falling back to NIFTY 50 only.");
+            warn!("Cannot parse config/recording.toml: {e}. Falling back to NIFTY 50 only.");
             return SubscriptionConfig {
                 buckets: vec![TokenBucket { exchange_type: 1, tokens: vec!["26000".to_string()] }],
                 mode: 3,
@@ -95,7 +95,7 @@ pub fn load_subscription_config() -> SubscriptionConfig {
         })
         .collect();
 
-    info!("Loaded {} instrument(s) from config/trading.toml", cfg.instruments.len());
+    info!("Loaded {} instrument(s) from config/recording.toml", cfg.instruments.len());
 
     SubscriptionConfig { buckets, mode: 3 }
 }

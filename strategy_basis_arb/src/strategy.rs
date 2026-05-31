@@ -141,6 +141,26 @@ impl BasisArbStrategy {
             "BASIS_ARB: basis={basis:.2} mean={mean:.2} std={std_dev:.2} z={z:.3}"
         );
 
+        // Guard: basis variance too small → z is numerically unstable (warm-up).
+        if std_dev < self.config.params.min_std_dev {
+            debug!(
+                "BASIS_ARB: skip — std_dev {std_dev:.4} < min_std_dev {:.4}",
+                self.config.params.min_std_dev
+            );
+            return Ok(());
+        }
+
+        // Guard: absurd z-score → warm-up / near-zero-variance artifact, not a
+        // real dislocation (see NEXT_STEPS: the z=-24 open artifact).
+        if z.abs() > self.config.params.max_z_score {
+            warn!(
+                "BASIS_ARB: skip — |z| {:.2} > max_z_score {:.2} (warm-up artifact?)",
+                z.abs(),
+                self.config.params.max_z_score
+            );
+            return Ok(());
+        }
+
         if !self.is_flat {
             return Ok(()); // already in a position — wait for exit signal
         }
