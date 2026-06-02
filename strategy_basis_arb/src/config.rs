@@ -85,7 +85,7 @@ impl Default for BasisArbParams {
             window_secs: 60,
             z_score_threshold: 2.0,
             min_samples: 30,
-            futures_instrument_id: "NIFTY26JUNFUT.NSE".to_string(),
+            futures_instrument_id: "NIFTYFUT.NSE".to_string(),
             spot_instrument_id: "NIFTY.NSE".to_string(),
             trade_qty_units: 75,
             max_z_score: 8.0,
