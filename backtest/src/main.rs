@@ -134,14 +134,19 @@ fn build_token_map(cfg: &TradingConfig, venue: Venue) -> std::collections::HashM
         .map(|e| (e.token, InstrumentId::new(Symbol::new(&e.symbol), venue)))
         .collect();
 
-    // Historical token aliases (see NEXT_STEPS gotcha #6): across the recorded
-    // May dataset the NIFTY futures token rolled (57515 on 2026-05-13 -> 66071
-    // afterwards) and the spot index token was corrected (26009 -> 26000 from
-    // 2026-05-24). Map the legacy tokens onto whichever NIFTY future / spot is
-    // registered in config so multi-day backtests don't silently drop early days.
-    // Only inserted if the target symbol is actually registered, and never
-    // overrides an existing token mapping.
-    for (legacy, symbol) in [(57515u32, "NIFTY26MAYFUT"), (26009u32, "NIFTY")] {
+    // Continuous-contract + historical token aliases. The basis-arb futures leg
+    // uses the logical symbol "NIFTYFUT"; map every recorded NIFTY-future token
+    // onto it (the current front-month token lives in config) so a single
+    // backtest can span months across contract rolls. Likewise map the spot
+    // index token used before the mid-May correction (26009 -> 26000). Only
+    // inserted if the target symbol is registered; never overrides an existing
+    // mapping.
+    for (legacy, symbol) in [
+        (66071u32, "NIFTYFUT"), // May 2026 future (expired; historical + 06-02 stub)
+        (57515u32, "NIFTYFUT"), // earlier future token (2026-05-13 data)
+        (61093u32, "NIFTYFUT"), // Jul 2026 future
+        (26009u32, "NIFTY"),    // spot index token before the mid-May correction
+    ] {
         let id = InstrumentId::new(Symbol::new(symbol), venue);
         if map.values().any(|v| *v == id) {
             map.entry(legacy).or_insert(id);

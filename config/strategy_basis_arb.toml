@@ -20,7 +20,7 @@ min_samples = 30
 
 # NautilusTrader instrument IDs (symbol.venue format).
 # These must match the instrument IDs registered in the LiveTradingNode.
-futures_instrument_id = "NIFTY26MAYFUT.NSE"
+futures_instrument_id = "NIFTYFUT.NSE"
 spot_instrument_id    = "NIFTY.NSE"
 
 # Order quantity in units (not lots). 65 = 1 NIFTY lot (current lot size per ScripMaster).

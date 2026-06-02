@@ -18,11 +18,12 @@ token          = 26000
 trading_symbol = "NIFTY50"
 exchange       = "NSE"
 
-# Active NIFTY future (token changes monthly — verify against ScripMaster).
+# Active NIFTY future — continuous logical symbol "NIFTYFUT". Roll the token /
+# trading_symbol monthly (verify against ScripMaster). Current: 30-Jun-2026.
 [[instruments]]
-symbol         = "NIFTY26MAYFUT"
-token          = 66071
-trading_symbol = "NIFTY26MAY26FUT"
+symbol         = "NIFTYFUT"
+token          = 62329
+trading_symbol = "NIFTY30JUN26FUT"
 exchange       = "NFO"
 
 [[instruments]]
