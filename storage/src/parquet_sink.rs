@@ -10,7 +10,8 @@
 use arrow::array::{Float64Array, Int16Array, Int32Array, Int64Array};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
-use chrono::{Datelike, Utc};
+use chrono::{Datelike, TimeZone, Utc};
+use chrono_tz::Asia::Kolkata;
 use common::Tick;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
@@ -26,6 +27,19 @@ const MAX_BUFFER_ROWS: usize = 500_000;
 
 /// Flush interval in minutes.
 const FLUSH_INTERVAL_MINS: u64 = 60;
+
+/// Converts a tick's Unix-nanosecond exchange timestamp to its IST calendar
+/// date as `(year, month, day)`. Falls back to the Unix epoch date if the
+/// timestamp is out of chrono's representable range.
+fn ist_date(ts_ns: i64) -> (i32, u32, u32) {
+    let secs = ts_ns.div_euclid(1_000_000_000);
+    let utc = Utc
+        .timestamp_opt(secs, 0)
+        .single()
+        .unwrap_or_else(|| Utc.timestamp_opt(0, 0).single().unwrap());
+    let ist = utc.with_timezone(&Kolkata);
+    (ist.year(), ist.month(), ist.day())
+}
 
 /// In-memory buffer that accumulates ticks and writes Parquet files.
 pub struct ParquetSink {
@@ -140,43 +154,50 @@ impl ParquetSink {
     }
 
     /// Flush all buffered data to Parquet files.
+    ///
+    /// Ticks are partitioned by IST calendar date (derived from each tick's
+    /// own `ts_ns`), not by the wall-clock flush time — a flush that fires
+    /// shortly after UTC midnight (~05:30 IST) would otherwise misfile the
+    /// previous IST trading day's ticks under the new UTC date.
     pub fn flush_all(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.total_rows == 0 {
             return Ok(());
         }
 
-        let now = Utc::now();
-        let date_dir = self.base_dir.join(format!(
-            "{}/{:02}/{:02}",
-            now.format("%Y"),
-            now.month(),
-            now.day()
-        ));
+        let flush_nonce = Utc::now().timestamp_millis();
 
         // Collect first to release the mutable borrow on self.buffers
         let entries: Vec<(i32, Vec<Tick>)> = self.buffers.drain().collect();
 
-        // Write each instrument buffer to its own Parquet file
+        // Write each instrument's ticks, grouped by IST calendar date, to
+        // separate Parquet files.
         for (inst_id, ticks) in entries {
             if ticks.is_empty() {
                 continue;
             }
 
-            let dir = date_dir.clone();
-            fs::create_dir_all(&dir)?;
+            let mut by_date: HashMap<(i32, u32, u32), Vec<Tick>> = HashMap::new();
+            for tick in ticks {
+                by_date.entry(ist_date(tick.ts_ns)).or_default().push(tick);
+            }
 
-            // Include the flush timestamp in the filename so successive
-            // flushes produce separate files instead of overwriting each other.
-            // e.g. 1594_1778668109000.parquet
-            let filename = format!("{}_{}.parquet", inst_id, now.timestamp_millis());
-            let path = dir.join(&filename);
+            for ((year, month, day), day_ticks) in by_date {
+                let dir = self.base_dir.join(format!("{year}/{month:02}/{day:02}"));
+                fs::create_dir_all(&dir)?;
 
-            self.write_parquet(&path, &ticks)?;
-            info!(
-                "Wrote {} ticks for inst_id={inst_id} to {}",
-                ticks.len(),
-                path.display()
-            );
+                // Include the flush timestamp in the filename so successive
+                // flushes produce separate files instead of overwriting each other.
+                // e.g. 1594_1778668109000.parquet
+                let filename = format!("{}_{}.parquet", inst_id, flush_nonce);
+                let path = dir.join(&filename);
+
+                self.write_parquet(&path, &day_ticks)?;
+                info!(
+                    "Wrote {} ticks for inst_id={inst_id} to {}",
+                    day_ticks.len(),
+                    path.display()
+                );
+            }
         }
 
         debug!("Flushed {} total rows to Parquet", self.total_rows);
