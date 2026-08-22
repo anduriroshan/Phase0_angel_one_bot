@@ -160,8 +160,9 @@ impl AngelOneDataClient {
                 msg = ws_stream.next() => {
                     match msg {
                         Some(Ok(Message::Binary(bytes))) => {
-                            let ts_init = UnixNanos::from(get_atomic_clock_realtime().get_time_ns().as_u64());
-                            Self::handle_binary_frame(&bytes, &instrument_map, &quote_subs, &book_subs, &data_sender, &mut seq_map, ts_init, tick_sender.as_ref());
+                            let ts_recv_raw = get_atomic_clock_realtime().get_time_ns().as_u64();
+                            let ts_init = UnixNanos::from(ts_recv_raw);
+                            Self::handle_binary_frame(&bytes, &instrument_map, &quote_subs, &book_subs, &data_sender, &mut seq_map, ts_init, ts_recv_raw as i64, tick_sender.as_ref());
                         }
                         Some(Ok(Message::Text(text))) => { info!("Angel One WS text: {text}"); }
                         Some(Ok(Message::Ping(ping))) => { let _ = ws_stream.send(Message::Pong(ping)).await; }
@@ -183,6 +184,7 @@ impl AngelOneDataClient {
         data_sender: &tokio::sync::mpsc::UnboundedSender<DataEvent>,
         seq_map: &mut HashMap<u32, i64>,
         ts_init: UnixNanos,
+        ts_recv_ns: i64,
         tick_sender: Option<&tokio::sync::mpsc::Sender<common::Tick>>,
     ) {
         let packet = match parse_binary_packet(bytes) {
@@ -192,7 +194,7 @@ impl AngelOneDataClient {
 
         // Forward raw tick to storage pipeline (independent of NautilusTrader routing).
         if let Some(sender) = tick_sender {
-            let tick = packet.to_tick();
+            let tick = packet.to_tick(ts_recv_ns);
             if let Err(e) = sender.try_send(tick) {
                 warn!("Storage channel full or closed, tick dropped: {e}");
             }

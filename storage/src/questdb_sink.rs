@@ -71,6 +71,33 @@ impl QuestDbSink {
             .column_i64("ask_qty_4", tick.ask_qty_4)?
             .column_f64("ask_price_5", tick.ask_price_5)?
             .column_i64("ask_qty_5", tick.ask_qty_5)?
+            .column_i64("ts_recv_ns", tick.ts_recv_ns)?
+            .column_i64("exchange_type", tick.exchange_type as i64)?
+            .column_i64("volume", tick.volume)?
+            .column_f64("avg_traded_price", tick.avg_traded_price)?
+            .column_f64("total_buy_qty", tick.total_buy_qty)?
+            .column_f64("total_sell_qty", tick.total_sell_qty)?
+            .column_f64("open", tick.open)?
+            .column_f64("high", tick.high)?
+            .column_f64("low", tick.low)?
+            .column_f64("close", tick.close)?
+            .column_i64("last_trade_ts_ns", tick.last_trade_ts_ns)?
+            .column_i64("open_interest", tick.open_interest)?
+            .column_i64("oi_change_pct_raw", tick.oi_change_pct_raw)?
+            .column_f64("upper_circuit", tick.upper_circuit)?
+            .column_f64("lower_circuit", tick.lower_circuit)?
+            .column_f64("week_52_high", tick.week_52_high)?
+            .column_f64("week_52_low", tick.week_52_low)?
+            .column_i64("best_bid_num_orders", tick.best_bid_num_orders as i64)?
+            .column_i64("best_ask_num_orders", tick.best_ask_num_orders as i64)?
+            .column_i64("bid_num_orders_2", tick.bid_num_orders_2 as i64)?
+            .column_i64("bid_num_orders_3", tick.bid_num_orders_3 as i64)?
+            .column_i64("bid_num_orders_4", tick.bid_num_orders_4 as i64)?
+            .column_i64("bid_num_orders_5", tick.bid_num_orders_5 as i64)?
+            .column_i64("ask_num_orders_2", tick.ask_num_orders_2 as i64)?
+            .column_i64("ask_num_orders_3", tick.ask_num_orders_3 as i64)?
+            .column_i64("ask_num_orders_4", tick.ask_num_orders_4 as i64)?
+            .column_i64("ask_num_orders_5", tick.ask_num_orders_5 as i64)?
             .at(TimestampNanos::new(tick.ts_ns))?;
 
         self.buffered += 1;
