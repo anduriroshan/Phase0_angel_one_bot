@@ -11,4 +11,5 @@ questdb-rs = "4"
 arrow = { version = "54", features = ["prettyprint"] }
 parquet = { version = "54", features = ["zstd"] }
 chrono = "0.4"
+chrono-tz = "0.10"
 tracing = "0.1"
