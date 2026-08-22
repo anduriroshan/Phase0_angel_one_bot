@@ -74,6 +74,36 @@ impl ParquetSink {
             Field::new("ask_qty_4", DataType::Int64, false),
             Field::new("ask_price_5", DataType::Float64, false),
             Field::new("ask_qty_5", DataType::Int64, false),
+            // --- Everything below is appended AFTER the original 26 columns
+            // (indices 0..25) so existing readers (e.g. backtest's index-based
+            // loader) and pre-existing Parquet files keep working unchanged. ---
+            Field::new("ts_recv_ns", DataType::Int64, false),
+            Field::new("exchange_type", DataType::Int16, false),
+            Field::new("volume", DataType::Int64, false),
+            Field::new("avg_traded_price", DataType::Float64, false),
+            Field::new("total_buy_qty", DataType::Float64, false),
+            Field::new("total_sell_qty", DataType::Float64, false),
+            Field::new("open", DataType::Float64, false),
+            Field::new("high", DataType::Float64, false),
+            Field::new("low", DataType::Float64, false),
+            Field::new("close", DataType::Float64, false),
+            Field::new("last_trade_ts_ns", DataType::Int64, false),
+            Field::new("open_interest", DataType::Int64, false),
+            Field::new("oi_change_pct_raw", DataType::Int64, false),
+            Field::new("upper_circuit", DataType::Float64, false),
+            Field::new("lower_circuit", DataType::Float64, false),
+            Field::new("week_52_high", DataType::Float64, false),
+            Field::new("week_52_low", DataType::Float64, false),
+            Field::new("best_bid_num_orders", DataType::Int32, false),
+            Field::new("best_ask_num_orders", DataType::Int32, false),
+            Field::new("bid_num_orders_2", DataType::Int32, false),
+            Field::new("bid_num_orders_3", DataType::Int32, false),
+            Field::new("bid_num_orders_4", DataType::Int32, false),
+            Field::new("bid_num_orders_5", DataType::Int32, false),
+            Field::new("ask_num_orders_2", DataType::Int32, false),
+            Field::new("ask_num_orders_3", DataType::Int32, false),
+            Field::new("ask_num_orders_4", DataType::Int32, false),
+            Field::new("ask_num_orders_5", DataType::Int32, false),
         ]));
 
         Self {
@@ -191,6 +221,34 @@ impl ParquetSink {
         let ask_price_5: Vec<f64> = ticks.iter().map(|t| t.ask_price_5).collect();
         let ask_qty_5: Vec<i64> = ticks.iter().map(|t| t.ask_qty_5).collect();
 
+        let ts_recv_ns: Vec<i64> = ticks.iter().map(|t| t.ts_recv_ns).collect();
+        let exchange_type: Vec<i16> = ticks.iter().map(|t| t.exchange_type).collect();
+        let volume: Vec<i64> = ticks.iter().map(|t| t.volume).collect();
+        let avg_traded_price: Vec<f64> = ticks.iter().map(|t| t.avg_traded_price).collect();
+        let total_buy_qty: Vec<f64> = ticks.iter().map(|t| t.total_buy_qty).collect();
+        let total_sell_qty: Vec<f64> = ticks.iter().map(|t| t.total_sell_qty).collect();
+        let open: Vec<f64> = ticks.iter().map(|t| t.open).collect();
+        let high: Vec<f64> = ticks.iter().map(|t| t.high).collect();
+        let low: Vec<f64> = ticks.iter().map(|t| t.low).collect();
+        let close: Vec<f64> = ticks.iter().map(|t| t.close).collect();
+        let last_trade_ts_ns: Vec<i64> = ticks.iter().map(|t| t.last_trade_ts_ns).collect();
+        let open_interest: Vec<i64> = ticks.iter().map(|t| t.open_interest).collect();
+        let oi_change_pct_raw: Vec<i64> = ticks.iter().map(|t| t.oi_change_pct_raw).collect();
+        let upper_circuit: Vec<f64> = ticks.iter().map(|t| t.upper_circuit).collect();
+        let lower_circuit: Vec<f64> = ticks.iter().map(|t| t.lower_circuit).collect();
+        let week_52_high: Vec<f64> = ticks.iter().map(|t| t.week_52_high).collect();
+        let week_52_low: Vec<f64> = ticks.iter().map(|t| t.week_52_low).collect();
+        let best_bid_num_orders: Vec<i32> = ticks.iter().map(|t| t.best_bid_num_orders).collect();
+        let best_ask_num_orders: Vec<i32> = ticks.iter().map(|t| t.best_ask_num_orders).collect();
+        let bid_num_orders_2: Vec<i32> = ticks.iter().map(|t| t.bid_num_orders_2).collect();
+        let bid_num_orders_3: Vec<i32> = ticks.iter().map(|t| t.bid_num_orders_3).collect();
+        let bid_num_orders_4: Vec<i32> = ticks.iter().map(|t| t.bid_num_orders_4).collect();
+        let bid_num_orders_5: Vec<i32> = ticks.iter().map(|t| t.bid_num_orders_5).collect();
+        let ask_num_orders_2: Vec<i32> = ticks.iter().map(|t| t.ask_num_orders_2).collect();
+        let ask_num_orders_3: Vec<i32> = ticks.iter().map(|t| t.ask_num_orders_3).collect();
+        let ask_num_orders_4: Vec<i32> = ticks.iter().map(|t| t.ask_num_orders_4).collect();
+        let ask_num_orders_5: Vec<i32> = ticks.iter().map(|t| t.ask_num_orders_5).collect();
+
         let batch = RecordBatch::try_new(
             self.schema.clone(),
             vec![
@@ -220,6 +278,33 @@ impl ParquetSink {
                 Arc::new(Int64Array::from(ask_qty_4)),
                 Arc::new(Float64Array::from(ask_price_5)),
                 Arc::new(Int64Array::from(ask_qty_5)),
+                Arc::new(Int64Array::from(ts_recv_ns)),
+                Arc::new(Int16Array::from(exchange_type)),
+                Arc::new(Int64Array::from(volume)),
+                Arc::new(Float64Array::from(avg_traded_price)),
+                Arc::new(Float64Array::from(total_buy_qty)),
+                Arc::new(Float64Array::from(total_sell_qty)),
+                Arc::new(Float64Array::from(open)),
+                Arc::new(Float64Array::from(high)),
+                Arc::new(Float64Array::from(low)),
+                Arc::new(Float64Array::from(close)),
+                Arc::new(Int64Array::from(last_trade_ts_ns)),
+                Arc::new(Int64Array::from(open_interest)),
+                Arc::new(Int64Array::from(oi_change_pct_raw)),
+                Arc::new(Float64Array::from(upper_circuit)),
+                Arc::new(Float64Array::from(lower_circuit)),
+                Arc::new(Float64Array::from(week_52_high)),
+                Arc::new(Float64Array::from(week_52_low)),
+                Arc::new(Int32Array::from(best_bid_num_orders)),
+                Arc::new(Int32Array::from(best_ask_num_orders)),
+                Arc::new(Int32Array::from(bid_num_orders_2)),
+                Arc::new(Int32Array::from(bid_num_orders_3)),
+                Arc::new(Int32Array::from(bid_num_orders_4)),
+                Arc::new(Int32Array::from(bid_num_orders_5)),
+                Arc::new(Int32Array::from(ask_num_orders_2)),
+                Arc::new(Int32Array::from(ask_num_orders_3)),
+                Arc::new(Int32Array::from(ask_num_orders_4)),
+                Arc::new(Int32Array::from(ask_num_orders_5)),
             ],
         )?;
 
@@ -275,6 +360,33 @@ mod tests {
             ask_price_3: 0.0, ask_qty_3: 0,
             ask_price_4: 0.0, ask_qty_4: 0,
             ask_price_5: 0.0, ask_qty_5: 0,
+            ts_recv_ns: 1_700_000_000_100_000_000,
+            exchange_type: 1,
+            volume: 0,
+            avg_traded_price: 0.0,
+            total_buy_qty: 0.0,
+            total_sell_qty: 0.0,
+            open: 0.0,
+            high: 0.0,
+            low: 0.0,
+            close: 0.0,
+            last_trade_ts_ns: 0,
+            open_interest: 0,
+            oi_change_pct_raw: 0,
+            upper_circuit: 0.0,
+            lower_circuit: 0.0,
+            week_52_high: 0.0,
+            week_52_low: 0.0,
+            best_bid_num_orders: 0,
+            best_ask_num_orders: 0,
+            bid_num_orders_2: 0,
+            bid_num_orders_3: 0,
+            bid_num_orders_4: 0,
+            bid_num_orders_5: 0,
+            ask_num_orders_2: 0,
+            ask_num_orders_3: 0,
+            ask_num_orders_4: 0,
+            ask_num_orders_5: 0,
         }
     }
 

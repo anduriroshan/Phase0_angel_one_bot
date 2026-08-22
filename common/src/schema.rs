@@ -133,6 +133,76 @@ pub struct Tick {
     pub ask_qty_4: i64,
     pub ask_price_5: f64,
     pub ask_qty_5: i64,
+
+    // --- Capture-boundary metadata ---
+    /// Wall-clock time this packet was received by our process, in nanoseconds
+    /// since epoch. NOT used in any trading decision (would violate replay
+    /// determinism — see ADR-005); this is diagnostic-only, for measuring feed
+    /// latency and detecting stale/frozen connections after the fact.
+    pub ts_recv_ns: i64,
+
+    /// Angel One exchange_type this tick arrived on (1=NSE_CM, 2=NSE_FO,
+    /// 3=BSE_CM, 4=BSE_FO, 5=MCX_FO, 7=NCX_FO, 13=CDE_FO). Provenance field —
+    /// lets a single store safely mix instruments from different exchanges.
+    pub exchange_type: i16,
+
+    // --- Quote extension (mode 2+): previously parsed and discarded ---
+    /// Cumulative traded volume for the session so far. 0 for LTP-only feeds.
+    /// Required for a real (volume-weighted) VWAP; the mid-price running mean
+    /// used today is only an approximation without this field.
+    pub volume: i64,
+    /// Exchange-computed average traded price for the session so far (₹).
+    pub avg_traded_price: f64,
+    /// Cumulative total buy-side order quantity across the book (as sent by
+    /// the exchange, not just top-5 depth). A raw order-flow imbalance input.
+    pub total_buy_qty: f64,
+    /// Cumulative total sell-side order quantity across the book.
+    pub total_sell_qty: f64,
+    /// Session open price (₹).
+    pub open: f64,
+    /// Session high price so far (₹).
+    pub high: f64,
+    /// Session low price so far (₹).
+    pub low: f64,
+    /// Previous session close price (₹).
+    pub close: f64,
+
+    // --- SnapQuote extension (mode 3): previously parsed and discarded ---
+    /// Timestamp of the last actual trade (not just this quote update), in
+    /// nanoseconds since epoch. 0 when unavailable (e.g. LTP/Quote-only modes).
+    pub last_trade_ts_ns: i64,
+    /// Open interest (F&O only; 0 for cash-market instruments).
+    pub open_interest: i64,
+    /// Raw exchange value for OI change. Scale/sign are NOT verified against
+    /// a live sample — do not assume this is already a percentage until
+    /// confirmed against real data. Stored raw rather than guessed-converted.
+    pub oi_change_pct_raw: i64,
+    /// Upper circuit price band for the session (₹). Needed to correctly
+    /// distinguish real crossed-book artifacts from legitimate circuit-limit
+    /// quotes, instead of the fixed 1% spread heuristic used today.
+    pub upper_circuit: f64,
+    /// Lower circuit price band for the session (₹).
+    pub lower_circuit: f64,
+    /// 52-week high (₹).
+    pub week_52_high: f64,
+    /// 52-week low (₹).
+    pub week_52_low: f64,
+
+    // --- Depth order counts (mode 3) ---
+    // Distinguishes "one large order" from "many small orders" at a price
+    // level — invisible in qty alone. Same bid/ask inversion as the price/qty
+    // ladders above (see `to_tick`): bid counts come from best_5_sell,
+    // ask counts come from best_5_buy.
+    pub best_bid_num_orders: i32,
+    pub best_ask_num_orders: i32,
+    pub bid_num_orders_2: i32,
+    pub bid_num_orders_3: i32,
+    pub bid_num_orders_4: i32,
+    pub bid_num_orders_5: i32,
+    pub ask_num_orders_2: i32,
+    pub ask_num_orders_3: i32,
+    pub ask_num_orders_4: i32,
+    pub ask_num_orders_5: i32,
 }
 
 // ---------------------------------------------------------------------------
@@ -203,7 +273,12 @@ impl ParsedPacket {
     ///
     /// The token string is parsed as an `i32` instrument ID.
     /// Price is converted from paise (integer) to ₹ (f64).
-    pub fn to_tick(&self) -> Tick {
+    ///
+    /// `ts_recv_ns` is the caller's wall-clock receive time (nanoseconds since
+    /// epoch) for this packet. It is metadata only — captured at the ingestion
+    /// boundary for latency diagnostics — and must never feed trading logic
+    /// (see ADR-005; business logic uses the injected/exchange clock only).
+    pub fn to_tick(&self, ts_recv_ns: i64) -> Tick {
         let inst_id = self.token.parse::<i32>().unwrap_or(0);
         Tick {
             ts_ns: self.exchange_timestamp * 1_000_000, // ms → ns
@@ -267,6 +342,39 @@ impl ParsedPacket {
             ask_qty_4: self.snap.as_ref().and_then(|s| s.best_5_buy.get(3)).map(|d| d.qty).unwrap_or(0),
             ask_price_5: self.snap.as_ref().and_then(|s| s.best_5_buy.get(4)).map(|d| d.price as f64 / 100.0).unwrap_or(0.0),
             ask_qty_5: self.snap.as_ref().and_then(|s| s.best_5_buy.get(4)).map(|d| d.qty).unwrap_or(0),
+
+            ts_recv_ns,
+            exchange_type: self.exchange as u8 as i16,
+
+            volume: self.quote.as_ref().map(|q| q.volume).unwrap_or(0),
+            avg_traded_price: self.quote.as_ref().map(|q| q.avg_traded_price as f64 / 100.0).unwrap_or(0.0),
+            total_buy_qty: self.quote.as_ref().map(|q| q.total_buy_qty).unwrap_or(0.0),
+            total_sell_qty: self.quote.as_ref().map(|q| q.total_sell_qty).unwrap_or(0.0),
+            open: self.quote.as_ref().map(|q| q.open as f64 / 100.0).unwrap_or(0.0),
+            high: self.quote.as_ref().map(|q| q.high as f64 / 100.0).unwrap_or(0.0),
+            low: self.quote.as_ref().map(|q| q.low as f64 / 100.0).unwrap_or(0.0),
+            close: self.quote.as_ref().map(|q| q.close as f64 / 100.0).unwrap_or(0.0),
+
+            last_trade_ts_ns: self.snap.as_ref().map(|s| s.last_traded_timestamp * 1_000_000).unwrap_or(0),
+            open_interest: self.snap.as_ref().map(|s| s.open_interest).unwrap_or(0),
+            oi_change_pct_raw: self.snap.as_ref().map(|s| s.oi_change_pct).unwrap_or(0),
+            upper_circuit: self.snap.as_ref().map(|s| s.upper_circuit as f64 / 100.0).unwrap_or(0.0),
+            lower_circuit: self.snap.as_ref().map(|s| s.lower_circuit as f64 / 100.0).unwrap_or(0.0),
+            week_52_high: self.snap.as_ref().map(|s| s.week_52_high as f64 / 100.0).unwrap_or(0.0),
+            week_52_low: self.snap.as_ref().map(|s| s.week_52_low as f64 / 100.0).unwrap_or(0.0),
+
+            // Same documented inversion as the price/qty ladders: bid counts
+            // come from best_5_sell, ask counts come from best_5_buy.
+            best_bid_num_orders: self.snap.as_ref().and_then(|s| s.best_5_sell.first()).map(|d| d.num_orders as i32).unwrap_or(0),
+            best_ask_num_orders: self.snap.as_ref().and_then(|s| s.best_5_buy.first()).map(|d| d.num_orders as i32).unwrap_or(0),
+            bid_num_orders_2: self.snap.as_ref().and_then(|s| s.best_5_sell.get(1)).map(|d| d.num_orders as i32).unwrap_or(0),
+            bid_num_orders_3: self.snap.as_ref().and_then(|s| s.best_5_sell.get(2)).map(|d| d.num_orders as i32).unwrap_or(0),
+            bid_num_orders_4: self.snap.as_ref().and_then(|s| s.best_5_sell.get(3)).map(|d| d.num_orders as i32).unwrap_or(0),
+            bid_num_orders_5: self.snap.as_ref().and_then(|s| s.best_5_sell.get(4)).map(|d| d.num_orders as i32).unwrap_or(0),
+            ask_num_orders_2: self.snap.as_ref().and_then(|s| s.best_5_buy.get(1)).map(|d| d.num_orders as i32).unwrap_or(0),
+            ask_num_orders_3: self.snap.as_ref().and_then(|s| s.best_5_buy.get(2)).map(|d| d.num_orders as i32).unwrap_or(0),
+            ask_num_orders_4: self.snap.as_ref().and_then(|s| s.best_5_buy.get(3)).map(|d| d.num_orders as i32).unwrap_or(0),
+            ask_num_orders_5: self.snap.as_ref().and_then(|s| s.best_5_buy.get(4)).map(|d| d.num_orders as i32).unwrap_or(0),
         }
     }
 }
@@ -336,7 +444,7 @@ mod tests {
             vec![depth(10000, 1), depth(10005, 2), depth(10010, 3), depth(10015, 4), depth(10020, 5)],
             vec![depth(9995, 10), depth(9990, 20), depth(9985, 30), depth(9980, 40), depth(9975, 50)],
         ))
-        .to_tick();
+        .to_tick(0);
 
         // L1 (inverted).
         assert_eq!(t.best_bid_price, 99.95);
@@ -363,12 +471,74 @@ mod tests {
             vec![depth(10000, 1), depth(10005, 2)],
             vec![depth(9995, 10)],
         ))
-        .to_tick();
+        .to_tick(0);
 
         assert_eq!(t.best_ask_price, 100.00);
         assert_eq!(t.ask_price_2, 100.05);
         assert_eq!(t.ask_price_3, 0.0); // missing
         assert_eq!(t.best_bid_price, 99.95);
         assert_eq!(t.bid_price_2, 0.0); // missing
+    }
+
+    #[test]
+    fn to_tick_captures_recv_ts_and_extended_quote_snap_fields() {
+        let pkt = ParsedPacket {
+            mode: SubscriptionMode::SnapQuote,
+            exchange: ExchangeType::NseFo,
+            token: "62329".to_string(),
+            sequence_number: 42,
+            exchange_timestamp: 1_700_000_000_000, // ms
+            last_traded_price: 2_350_000, // ₹23,500.00
+            quote: Some(QuoteData {
+                last_traded_qty: 75,
+                avg_traded_price: 2_349_500,
+                volume: 1_234_567,
+                total_buy_qty: 100_000.0,
+                total_sell_qty: 90_000.0,
+                open: 2_340_000,
+                high: 2_360_000,
+                low: 2_330_000,
+                close: 2_335_000,
+            }),
+            snap: Some(SnapQuoteData {
+                last_traded_timestamp: 1_700_000_001_000,
+                open_interest: 5_000_000,
+                oi_change_pct: -250,
+                upper_circuit: 2_500_000,
+                lower_circuit: 2_100_000,
+                week_52_high: 2_600_000,
+                week_52_low: 1_900_000,
+                best_5_buy: vec![depth(2_350_500, 1)], // ask ladder (inverted)
+                best_5_sell: vec![DepthEntry { flag: 1, qty: 10, price: 2_349_500, num_orders: 7 }], // bid ladder
+            }),
+        };
+
+        // Wall-clock receive time is caller-supplied metadata, not derived.
+        let t = pkt.to_tick(9_999_999_999);
+        assert_eq!(t.ts_recv_ns, 9_999_999_999);
+        assert_eq!(t.exchange_type, ExchangeType::NseFo as u8 as i16);
+
+        // Quote extension — previously parsed and silently discarded.
+        assert_eq!(t.volume, 1_234_567);
+        assert!((t.avg_traded_price - 23_495.00).abs() < 1e-9);
+        assert_eq!(t.total_buy_qty, 100_000.0);
+        assert_eq!(t.total_sell_qty, 90_000.0);
+        assert!((t.open - 23_400.00).abs() < 1e-9);
+        assert!((t.high - 23_600.00).abs() < 1e-9);
+        assert!((t.low - 23_300.00).abs() < 1e-9);
+        assert!((t.close - 23_350.00).abs() < 1e-9);
+
+        // SnapQuote extension.
+        assert_eq!(t.last_trade_ts_ns, 1_700_000_001_000 * 1_000_000);
+        assert_eq!(t.open_interest, 5_000_000);
+        assert_eq!(t.oi_change_pct_raw, -250); // stored raw, not rescaled
+        assert!((t.upper_circuit - 25_000.00).abs() < 1e-9);
+        assert!((t.lower_circuit - 21_000.00).abs() < 1e-9);
+        assert!((t.week_52_high - 26_000.00).abs() < 1e-9);
+        assert!((t.week_52_low - 19_000.00).abs() < 1e-9);
+
+        // Depth order counts, same bid/ask inversion as price/qty.
+        assert_eq!(t.best_bid_num_orders, 7);
+        assert_eq!(t.best_ask_num_orders, 1);
     }
 }

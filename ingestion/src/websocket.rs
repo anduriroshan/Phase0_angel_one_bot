@@ -219,9 +219,13 @@ async fn run_stream(
             msg = stream.next() => {
                 match msg {
                     Some(Ok(Message::Binary(data))) => {
+                        // Wall-clock receive time, captured as close to arrival as
+                        // possible. Diagnostic-only (latency measurement) — never
+                        // used in trading logic, so this does not affect determinism.
+                        let ts_recv_ns = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
                         match parse_binary_packet(&data) {
                             Ok(parsed) => {
-                                let tick = parsed.to_tick();
+                                let tick = parsed.to_tick(ts_recv_ns);
                                 if tx.send(tick).await.is_err() {
                                     info!("Tick channel closed, stopping stream");
                                     break;

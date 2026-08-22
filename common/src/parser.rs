@@ -235,13 +235,18 @@ mod tests {
     fn test_to_tick_conversion() {
         let data = make_ltp_packet();
         let pkt = parse_binary_packet(&data).unwrap();
-        let tick = pkt.to_tick();
+        let tick = pkt.to_tick(1_700_000_000_500_000_000);
 
         assert_eq!(tick.inst_id, 26009);
         assert!((tick.price - 245.50).abs() < f64::EPSILON);
         assert_eq!(tick.ts_ns, 1_700_000_000_000 * 1_000_000);
         assert_eq!(tick.seq_no, 1001);
         assert_eq!(tick.side, 0);
+        assert_eq!(tick.ts_recv_ns, 1_700_000_000_500_000_000);
+        assert_eq!(tick.exchange_type, 2); // NseFo, from the packet header
+        // LTP-only packet: no quote/snap block, extended fields default to zero.
+        assert_eq!(tick.volume, 0);
+        assert_eq!(tick.open_interest, 0);
     }
 
     #[test]
