@@ -196,6 +196,10 @@ fn make_instrument(instrument_id: InstrumentId, maker_fee: Decimal, taker_fee: D
 ///   col 7: best_bid_qty   Int64
 ///   col 8: best_ask_price Float64
 ///   col 9: best_ask_qty   Int64
+///
+/// Columns 10..25 (L2-L5 depth) and 26+ (ts_recv_ns, volume, OI, circuits,
+/// num_orders, etc. — see `common::schema::Tick`) exist in the file but are
+/// not read here; this loader only needs L1 quotes for the QuoteTick replay.
 fn load_parquet(path: &PathBuf, instrument_id: InstrumentId) -> Result<Vec<Data>> {
     let file = File::open(path).with_context(|| format!("Cannot open {path:?}"))?;
     let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
