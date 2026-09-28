@@ -1,10 +1,24 @@
-# Transaction-cost model for the backtest (Angel One, zero brokerage).
+# Transaction-cost model for the backtest (Angel One).
+#
+# TWO SEPARATE COST TERMS — they are modelled in two different places because
+# NautilusTrader's `FeeModelAny` allows only ONE fee model per venue
+# (`Fixed` OR `MakerTaker`, never both) and ADR-007 pins the crate:
+#
+#   1. PERCENTAGE-OF-NOTIONAL (statutory)  -> charged inside the engine via
+#      MakerTakerFeeModel, using the *_taker_fee values below.
+#   2. FLAT PER-EXECUTED-ORDER (brokerage) -> applied AFTER the run by
+#      scripts/run_backtest_all.ps1, using brokerage_per_order_inr below.
+#
+# Term 2 was previously MISSING ENTIRELY. That matters more than it sounds:
+# a flat fee does not scale with notional, so it punishes order COUNT. A day
+# with 216 orders and Rs 302 of gross PnL is deeply negative once a ~Rs 20
+# flat fee lands on every fill, even though the percentage model barely moves.
 #
 # NautilusTrader's default MakerTakerFeeModel charges `notional * taker_fee`
-# on every taker fill (our market orders are takers). We model cost as a
-# symmetric PER-SIDE fraction of notional: the sum across the buy + sell legs
-# approximates the realistic ROUND-TRIP cost, which is what matters for a
-# net-of-cost go/no-go decision.
+# on every taker fill (our market orders are takers). We model the statutory
+# cost as a symmetric PER-SIDE fraction of notional: the sum across the buy +
+# sell legs approximates the realistic ROUND-TRIP cost, which is what matters
+# for a net-of-cost go/no-go decision.
 #
 # NOTE: real STT is charged on the SELL side only. Charging half-rate on each
 # side yields the same round-trip total (correct net PnL) but approximate
@@ -17,10 +31,27 @@
 #     = STT 0.025% (sell) + exchange ~0.003% x2 + stamp 0.003% (buy) + GST + SEBI
 #   NIFTY futures round-trip   ~0.0255% of notional
 #     = STT 0.02% (sell)  + exchange ~0.0017% x2 + stamp 0.002% (buy) + GST + SEBI
-schema_version = 1
+schema_version = 2
 
-# Per-side fraction of notional (round-trip cost ~= 2x these values).
+# --- Term 1: per-side fraction of notional (round-trip cost ~= 2x these) ---
 equity_maker_fee  = 0.00018
 equity_taker_fee  = 0.00018
 futures_maker_fee = 0.00013
 futures_taker_fee = 0.00013
+
+# --- Term 2: flat brokerage per EXECUTED order ---
+#
+# VERIFY THIS AGAINST YOUR ACTUAL ANGEL ONE PLAN before trusting any net
+# figure. Angel One's published intraday/F&O rate is Rs 20 per executed order
+# (or a small % of turnover, whichever is lower), but plans differ per account
+# and the old "zero brokerage" delivery tier no longer applies broadly.
+# Set to 0.0 only if you have confirmed your account genuinely pays nothing.
+brokerage_per_order_inr = 20.0
+
+# GST applies to brokerage (and to exchange transaction charges, but those are
+# already blended into the *_taker_fee values above — do not double-count).
+gst_pct = 18.0
+
+# Charged per executed order on BOTH legs. An entry and its exit are two
+# separate executed orders, so a completed round trip costs
+# 2 * brokerage_per_order_inr * (1 + gst_pct/100).
