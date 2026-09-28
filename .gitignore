@@ -1,12 +1,25 @@
 # Rust build artifacts
 /target
 
-# Environment secrets
+# Environment secrets — never commit
 .env
+.jwt_token
+*.pem
+*.key
 
-# Market data output
+# Broker session/auth artifacts
+.feed_token
+.refresh_token
 
+# Market data output (also an Angel One ToS redistribution concern)
+data/
 
+# Logs
+*.log
+log*.txt
+
+# Broker contract spec — fetch at boot, never read a committed copy
+OpenAPIScripMaster.json
 
 # IDE
 .vscode/
